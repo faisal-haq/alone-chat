@@ -285,7 +285,7 @@
 </head>
 <body>
 <div class="header">
-<div class="logo">Alone<span>Chat</span> <small style="font-size:12px;color:#5cbbff;">[v2]</small></div>
+<div class="logo">Alone<span>Chat</span> <small style="font-size:12px;color:#5cbbff;">[v3]</small></div>
         <div class="status-bar">
             <span id="user-count">0</span> users online
         </div>
@@ -561,13 +561,20 @@ socket.on('answer', async (data) => {
             // Don't process answers from yourself
             if (data.targetId === socket.id) return;
             
-            if (peerConnection && data.sdp) {
-                try {
-                    const desc = new RTCSessionDescription({ type: 'answer', sdp: data.sdp });
-                    await peerConnection.setRemoteDescription(desc);
-                } catch (err) {
-                    console.error('Error setting remote description:', err);
+            if (!peerConnection) return;
+            
+            // Only set remote description if we're in have-local-offer state
+            if (peerConnection.signalingState === 'have-local-offer') {
+                if (data.sdp) {
+                    try {
+                        const desc = new RTCSessionDescription({ type: 'answer', sdp: data.sdp });
+                        await peerConnection.setRemoteDescription(desc);
+                    } catch (err) {
+                        console.error('Error setting remote description:', err);
+                    }
                 }
+            } else {
+                console.log('Ignoring answer - wrong state:', peerConnection.signalingState);
             }
         });
         
