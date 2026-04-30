@@ -363,11 +363,23 @@ let localStream = null;
         
 const iceServers = {
             iceServers: [
+                // STUN servers
                 { urls: 'stun:stun.l.google.com:19302' },
                 { urls: 'stun:stun1.l.google.com:19302' },
                 { urls: 'stun:stun2.l.google.com:19302' },
                 { urls: 'stun:stun3.l.google.com:19302' },
-                { urls: 'stun:stun4.l.google.com:19302' }
+                { urls: 'stun:stun4.l.google.com:19302' },
+                // Free public TURN server (limited capacity)
+                { 
+                    urls: 'turn:global-turn1.xirs.net:80',
+                    username: 'guest',
+                    credential: 'someguest'
+                },
+                {
+                    urls: 'turn:global-turn2.xirs.net:443',
+                    username: 'guest', 
+                    credential: 'someguest'
+                }
             ],
             iceCandidatePoolSize: 10
         };
