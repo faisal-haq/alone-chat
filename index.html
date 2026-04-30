@@ -284,9 +284,15 @@
     </style>
 </head>
 <body>
-    <div class="header">
+<div class="header">
         <div class="logo">Alone<span>Chat</span></div>
-        <div class="status-bar" id="status">Looking for someone...</div>
+        <div class="status-bar">
+            <span id="user-count">0</span> users online
+        </div>
+    </div>
+    
+    <div style="text-align: center; padding: 10px; background: #f5f5f5; color: #666; font-size: 14px;">
+        <span id="status">Looking for someone...</span>
     </div>
     
 <div class="intro" id="intro-screen">
@@ -340,7 +346,7 @@
         &copy; 2026 AloneChat - Talk to strangers around the world
     </div>
     
-    <script src="/socket.io/socket.io.js"></script>
+<script src="/socket.io/socket.io.js"></script>
     <script>
         const socket = io();
         
@@ -349,6 +355,11 @@ let localStream = null;
         let currentMode = null;
         let partnerId = null;
         let selectedInterests = [];
+        
+        // Listen for user count updates
+        socket.on('user-count', (data) => {
+            document.getElementById('user-count').textContent = data.count;
+        });
         
         const iceServers = {
             iceServers: [
@@ -408,7 +419,14 @@ async function startChat(mode) {
             status.textContent = 'Looking for a stranger...';
         });
         
-        socket.on('matched', async (data) => {
+socket.on('matched', async (data) => {
+            // Don't connect to yourself
+            if (data.partnerId === socket.id) {
+                console.log('Matched with self, waiting for another partner...');
+                socket.emit('next');
+                return;
+            }
+            
             partnerId = data.partnerId;
             waitingMsg.style.display = 'none';
             chatMessages.style.display = 'grid';
@@ -423,22 +441,27 @@ async function startChat(mode) {
                 });
                 
                 peerConnection.ontrack = (event) => {
-                    remoteVideo.srcObject = event.streams[0];
+                    if (event.streams && event.streams[0]) {
+                        remoteVideo.srcObject = event.streams[0];
+                    }
                 };
                 
                 peerConnection.onicecandidate = (event) => {
                     if (event.candidate) {
-                        socket.emit('ice-candidate', { candidate: event.candidate });
+                        socket.emit('ice-candidate', { candidate: event.candidate, targetId: partnerId });
                     }
                 };
                 
                 const offer = await peerConnection.createOffer();
                 await peerConnection.setLocalDescription(offer);
-                socket.emit('offer', { sdp: offer.sdp });
+                socket.emit('offer', { sdp: offer.sdp, targetId: partnerId });
             }
         });
         
         socket.on('offer', async (data) => {
+            // Don't process offers from yourself
+            if (data.targetId === socket.id) return;
+            
             peerConnection = new RTCPeerConnection(iceServers);
             
             if (localStream) {
@@ -448,28 +471,43 @@ async function startChat(mode) {
             }
             
             peerConnection.ontrack = (event) => {
-                remoteVideo.srcObject = event.streams[0];
+                if (event.streams && event.streams[0]) {
+                    remoteVideo.srcObject = event.streams[0];
+                }
             };
             
             peerConnection.onicecandidate = (event) => {
                 if (event.candidate) {
-                    socket.emit('ice-candidate', { candidate: event.candidate });
+                    const senderId = data.senderId || socket.id;
+                    socket.emit('ice-candidate', { candidate: event.candidate, targetId: senderId });
                 }
             };
             
             await peerConnection.setRemoteDescription(new RTCSessionDescription(data.sdp));
             const answer = await peerConnection.createAnswer();
             await peerConnection.setLocalDescription(answer);
-            socket.emit('answer', { sdp: answer.sdp });
+            socket.emit('answer', { sdp: answer.sdp, targetId: data.senderId });
         });
         
         socket.on('answer', async (data) => {
-            await peerConnection.setRemoteDescription(new RTCSessionDescription(data.sdp));
+            // Don't process answers from yourself
+            if (data.targetId === socket.id) return;
+            
+            if (peerConnection) {
+                await peerConnection.setRemoteDescription(new RTCSessionDescription(data.sdp));
+            }
         });
         
         socket.on('ice-candidate', async (data) => {
+            // Don't process ICE candidates from yourself
+            if (data.targetId === socket.id) return;
+            
             if (peerConnection && data.candidate) {
-                await peerConnection.addIceCandidate(new RTCIceCandidate(data.candidate));
+                try {
+                    await peerConnection.addIceCandidate(new RTCIceCandidate(data.candidate));
+                } catch (err) {
+                    console.error('Error adding ICE candidate:', err);
+                }
             }
         });
         

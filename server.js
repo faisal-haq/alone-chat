@@ -16,20 +16,44 @@ const io = socketIo(server, {
 
 app.use(express.static(path.join(__dirname)));
 
+// Track connected users and their modes
+let allUsers = new Set();
 let waitingVideoUsers = [];
 let waitingTextUsers = [];
 
+// Broadcast user count to all connected clients
+function broadcastUserCount() {
+  const count = allUsers.size;
+  io.emit('user-count', { count: count });
+  console.log(`Live users: ${count}`);
+}
+
 io.on('connection', (socket) => {
   console.log('User connected:', socket.id);
+  allUsers.add(socket.id);
+  broadcastUserCount();
+  
   let currentMode = null;
 
-  socket.on('join', (data = {}) => {
+socket.on('join', (data = {}) => {
     currentMode = data.mode || 'video';
     socket.mode = currentMode;
     
+    // Find a partner - but NOT yourself!
+    let partner = null;
+    
     if (currentMode === 'video') {
-      if (waitingVideoUsers.length > 0) {
-        const partner = waitingVideoUsers.pop();
+      // Find a partner from waiting list who is NOT yourself
+      const candidates = waitingVideoUsers.filter(c => c.id !== socket.id);
+      
+      if (candidates.length > 0) {
+        partner = candidates[0];
+        // Remove this partner from waiting list
+        const idx = waitingVideoUsers.indexOf(partner);
+        if (idx > -1) waitingVideoUsers.splice(idx, 1);
+      }
+      
+      if (partner) {
         socket.partner = partner;
         partner.partner = socket;
 
@@ -40,8 +64,17 @@ io.on('connection', (socket) => {
         socket.emit('waiting');
       }
     } else {
-      if (waitingTextUsers.length > 0) {
-        const partner = waitingTextUsers.pop();
+      // Find a partner from waiting list who is NOT yourself
+      const candidates = waitingTextUsers.filter(c => c.id !== socket.id);
+      
+      if (candidates.length > 0) {
+        partner = candidates[0];
+        // Remove this partner from waiting list
+        const idx = waitingTextUsers.indexOf(partner);
+        if (idx > -1) waitingTextUsers.splice(idx, 1);
+      }
+      
+      if (partner) {
         socket.partner = partner;
         partner.partner = socket;
 
@@ -54,21 +87,24 @@ io.on('connection', (socket) => {
     }
   });
 
-  socket.on('offer', (data) => {
-    if (socket.partner) {
-      socket.partner.emit('offer', data);
+socket.on('offer', (data) => {
+    // Only send offer to the partner, not yourself
+    if (socket.partner && data.targetId === socket.partner.id) {
+      socket.partner.emit('offer', { sdp: data.sdp, senderId: socket.id });
     }
   });
 
   socket.on('answer', (data) => {
-    if (socket.partner) {
-      socket.partner.emit('answer', data);
+    // Only send answer to the partner, not yourself
+    if (socket.partner && data.targetId === socket.partner.id) {
+      socket.partner.emit('answer', { sdp: data.sdp, senderId: socket.id });
     }
   });
 
   socket.on('ice-candidate', (data) => {
-    if (socket.partner) {
-      socket.partner.emit('ice-candidate', data);
+    // Only send ICE candidate to the partner, not yourself
+    if (socket.partner && data.targetId === socket.partner.id) {
+      socket.partner.emit('ice-candidate', { candidate: data.candidate, senderId: socket.id });
     }
   });
 
@@ -78,7 +114,7 @@ io.on('connection', (socket) => {
     }
   });
 
-  socket.on('next', () => {
+socket.on('next', () => {
     if (socket.partner) {
       socket.partner.emit('partner-left');
       socket.partner.partner = null;
@@ -87,8 +123,14 @@ io.on('connection', (socket) => {
     
     const mode = socket.mode || 'video';
     if (mode === 'video') {
-      if (waitingVideoUsers.length > 0) {
-        const partner = waitingVideoUsers.pop();
+      // Find a partner who is NOT yourself
+      const candidates = waitingVideoUsers.filter(c => c.id !== socket.id);
+      
+      if (candidates.length > 0) {
+        const partner = candidates[0];
+        const idx = waitingVideoUsers.indexOf(partner);
+        if (idx > -1) waitingVideoUsers.splice(idx, 1);
+        
         socket.partner = partner;
         partner.partner = socket;
 
@@ -99,8 +141,14 @@ io.on('connection', (socket) => {
         socket.emit('waiting');
       }
     } else {
-      if (waitingTextUsers.length > 0) {
-        const partner = waitingTextUsers.pop();
+      // Find a partner who is NOT yourself
+      const candidates = waitingTextUsers.filter(c => c.id !== socket.id);
+      
+      if (candidates.length > 0) {
+        const partner = candidates[0];
+        const idx = waitingTextUsers.indexOf(partner);
+        if (idx > -1) waitingTextUsers.splice(idx, 1);
+        
         socket.partner = partner;
         partner.partner = socket;
 
@@ -113,8 +161,11 @@ io.on('connection', (socket) => {
     }
   });
 
-  socket.on('disconnect', () => {
+socket.on('disconnect', () => {
     console.log('User disconnected:', socket.id);
+    allUsers.delete(socket.id);
+    broadcastUserCount();
+    
     if (socket.partner) {
       socket.partner.emit('partner-left');
       socket.partner.partner = null;
