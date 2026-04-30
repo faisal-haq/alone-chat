@@ -491,10 +491,14 @@ socket.on('matched', async (data) => {
                     console.log('Connection state:', peerConnection.connectionState);
                 };
                 
-                // Create and send offer
-                const offer = await peerConnection.createOffer({ offerToReceiveAudio: true, offerToReceiveVideo: true });
-                await peerConnection.setLocalDescription(offer);
-                socket.emit('offer', { sdp: offer.sdp, targetId: partnerId });
+// Create and send offer
+                try {
+                    const offer = await peerConnection.createOffer({ offerToReceiveAudio: true, offerToReceiveVideo: true });
+                    await peerConnection.setLocalDescription(offer);
+                    socket.emit('offer', { sdp: offer.sdp, targetId: partnerId });
+                } catch (err) {
+                    console.error('Error creating offer:', err);
+                }
             }
         });
         
@@ -542,33 +546,65 @@ peerConnection.ontrack = (event) => {
                 console.log('Connection state:', peerConnection.connectionState);
             };
             
-            await peerConnection.setRemoteDescription(new RTCSessionDescription(data.sdp));
-            const answer = await peerConnection.createAnswer({ offerToReceiveAudio: true, offerToReceiveVideo: true });
-            await peerConnection.setLocalDescription(answer);
-            socket.emit('answer', { sdp: answer.sdp, targetId: data.senderId });
+try {
+                const desc = new RTCSessionDescription({ type: 'offer', sdp: data.sdp });
+                await peerConnection.setRemoteDescription(desc);
+                const answer = await peerConnection.createAnswer({ offerToReceiveAudio: true, offerToReceiveVideo: true });
+                await peerConnection.setLocalDescription(answer);
+                socket.emit('answer', { sdp: answer.sdp, targetId: data.senderId });
+            } catch (err) {
+                console.error('Error handling offer:', err);
+            }
         });
         
-        socket.on('answer', async (data) => {
+socket.on('answer', async (data) => {
             // Don't process answers from yourself
             if (data.targetId === socket.id) return;
             
-            if (peerConnection) {
-                await peerConnection.setRemoteDescription(new RTCSessionDescription(data.sdp));
+            if (peerConnection && data.sdp) {
+                try {
+                    const desc = new RTCSessionDescription({ type: 'answer', sdp: data.sdp });
+                    await peerConnection.setRemoteDescription(desc);
+                } catch (err) {
+                    console.error('Error setting remote description:', err);
+                }
             }
         });
+        
+        // Store ICE candidates until remote description is set
+        let pendingIceCandidates = [];
         
         socket.on('ice-candidate', async (data) => {
             // Don't process ICE candidates from yourself
             if (data.targetId === socket.id) return;
             
-            if (peerConnection && data.candidate) {
+            if (!peerConnection) return;
+            
+            if (peerConnection.remoteDescription) {
                 try {
                     await peerConnection.addIceCandidate(new RTCIceCandidate(data.candidate));
                 } catch (err) {
                     console.error('Error adding ICE candidate:', err);
                 }
+            } else {
+                // Queue candidates for later
+                pendingIceCandidates.push(data.candidate);
             }
         });
+        
+        // Check for pending ICE candidates periodically
+        setInterval(async () => {
+            if (peerConnection && peerConnection.remoteDescription && pendingIceCandidates.length > 0) {
+                const candidates = pendingIceCandidates.splice(0);
+                for (const candidate of candidates) {
+                    try {
+                        await peerConnection.addIceCandidate(new RTCIceCandidate(candidate));
+                    } catch (err) {
+                        console.error('Error adding queued ICE candidate:', err);
+                    }
+                }
+            }
+        }, 100);
         
         socket.on('message', (data) => {
             addMessage(data.text, 'stranger');
