@@ -372,7 +372,11 @@ const iceServers = {
                 { urls: 'stun:stun1.l.google.com:19302' },
                 { urls: 'stun:stun2.l.google.com:19302' },
                 // STUN servers - Twilio
-                { urls: 'stun:global.stun.twilio.com:3478' }
+                { urls: 'stun:global.stun.twilio.com:3478' },
+                // TURN servers (required for symmetric NAT)
+                { urls: 'turn:openrelay.metered.ca:80', username: 'openrelayproject', credential: 'openrelayproject' },
+                { urls: 'turn:openrelay.metered.ca:443', username: 'openrelayproject', credential: 'openrelayproject' },
+                { urls: 'turn:openrelay.metered.ca:443?transport=tcp', username: 'openrelayproject', credential: 'openrelayproject' }
             ],
             iceCandidatePoolSize: 10
         };
@@ -470,49 +474,32 @@ socket.on('matched', async (data) => {
 peerConnection = new RTCPeerConnection(iceServers, {
                     bundlePolicy: 'max-compat',
                     sdpSemantics: 'unified-plan',
-                    iceTransportPolicy: 'all'
+                    iceTransportPolicy: 'relay'
                 });
                 
-                // Use addTrack to add local streams
-                const videoTrack = localStream.getVideoTracks()[0];
-                const audioTrack = localStream.getAudioTracks()[0];
-                
-                if (videoTrack) {
-                    peerConnection.addTrack(videoTrack, localStream);
+                // Add local tracks - essential for sending
+                if (localStream) {
+                    localStream.getTracks().forEach(track => {
+                        peerConnection.addTrack(track, localStream);
+                    });
                 }
-                if (audioTrack) {
-                    peerConnection.addTrack(audioTrack, localStream);
-                }
-                
-                console.log('Local tracks added');
                 
                 // Handle incoming tracks
                 peerConnection.ontrack = (event) => {
-                    console.log('Received remote track', event.track.kind, event.track.id);
+                    console.log('Received remote track', event.track.kind, event.streams);
                     
-                    let remoteStream = null;
+                    const remoteStream = event.streams[0] || new MediaStream();
+                    remoteVideo.srcObject = remoteStream;
+                    remoteVideo.autoplay = true;
+                    remoteVideo.playsInline = true;
+                    remoteVideo.muted = false;
                     
-                    if (event.streams && event.streams[0]) {
-                        remoteStream = event.streams[0];
-                    } else if (event.track) {
-                        // Create new stream if no streams available
-                        remoteStream = remoteVideo.srcObject || new MediaStream();
-                        remoteStream.addTrack(event.track);
-                    }
-                    
-                    if (remoteStream) {
-                        remoteVideo.srcObject = remoteStream;
-                        remoteVideo.autoplay = true;
-                        remoteVideo.playsInline = true;
-                        remoteVideo.muted = false;
-                        
-                        // Ensure video plays
-                        remoteVideo.play().then(() => {
-                            console.log('Remote video playing');
-                        }).catch(err => {
-                            console.error('Play error:', err);
-                        });
-                    }
+                    // Ensure video plays
+                    remoteVideo.play().then(() => {
+                        console.log('Remote video playing');
+                    }).catch(err => {
+                        console.error('Play error:', err);
+                    });
                 };
                 
                 // ICE candidates
@@ -543,28 +530,21 @@ peerConnection = new RTCPeerConnection(iceServers, {
                     }
                 };
                 
-                // Debug: log when negotiation is needed
-                peerConnection.onnegotiationneeded = () => {
-                    console.log('Negotiation needed');
-                };
-                
-// Only the offerer creates and sends offer
+                // Only the offerer creates and sends offer
                 if (isOfferer) {
                     try {
-                        // Create offer with receive flags
-                        const offer = await peerConnection.createOffer();
+                        const offer = await peerConnection.createOffer({
+                            offerToReceiveAudio: true,
+                            offerToReceiveVideo: true
+                        });
                         await peerConnection.setLocalDescription(offer);
                         
-                        // Update to allow receiving
-                        offer.sdp = offer.sdp.replace(/a=sendonly/g, 'a=sendrecv');
-                        
                         socket.emit('offer', { sdp: offer.sdp, targetId: partnerId });
-                        console.log('Offer sent with receive capability');
+                        console.log('Offer sent');
                     } catch (err) {
                         console.error('Error creating offer:', err);
                     }
                 } else {
-                    // Answerer waits for offer - no action needed now
                     console.log('Waiting for offer...');
                 }
             }
@@ -587,22 +567,14 @@ socket.on('offer', async (data) => {
 peerConnection = new RTCPeerConnection(iceServers, {
                 bundlePolicy: 'max-compat',
                 sdpSemantics: 'unified-plan',
-                iceTransportPolicy: 'all'
+                iceTransportPolicy: 'relay'
             });
             
-            // Use transceivers for both - not addTrack
+            // Add local tracks - essential for sending
             if (localStream) {
-                peerConnection.addTransceiver('video', { 
-                    direction: 'sendrecv', 
-                    streams: [localStream] 
+                localStream.getTracks().forEach(track => {
+                    peerConnection.addTrack(track, localStream);
                 });
-                peerConnection.addTransceiver('audio', { 
-                    direction: 'sendrecv', 
-                    streams: [localStream] 
-                });
-            } else {
-                peerConnection.addTransceiver('video', { direction: 'recvonly' });
-                peerConnection.addTransceiver('audio', { direction: 'recvonly' });
             }
             
             // Set connection timeout for answerer
@@ -615,40 +587,22 @@ peerConnection = new RTCPeerConnection(iceServers, {
                 }
             }, 30000);
             
-            // Add local tracks if available
-            if (localStream) {
-                localStream.getTracks().forEach(track => {
-                    peerConnection.addTrack(track, localStream);
-                });
-            }
-            
 // Handle incoming tracks
             peerConnection.ontrack = (event) => {
-                console.log('Received remote track (answerer)', event.track.kind, event.track.id);
+                console.log('Received remote track (answerer)', event.track.kind, event.streams);
                 
-                let remoteStream = null;
+                const remoteStream = event.streams[0] || new MediaStream();
+                remoteVideo.srcObject = remoteStream;
+                remoteVideo.autoplay = true;
+                remoteVideo.playsInline = true;
+                remoteVideo.muted = false;
                 
-                if (event.streams && event.streams[0]) {
-                    remoteStream = event.streams[0];
-                } else if (event.track) {
-                    // Create new stream if no streams available
-                    remoteStream = remoteVideo.srcObject || new MediaStream();
-                    remoteStream.addTrack(event.track);
-                }
-                
-                if (remoteStream) {
-                    remoteVideo.srcObject = remoteStream;
-                    remoteVideo.autoplay = true;
-                    remoteVideo.playsInline = true;
-                    remoteVideo.muted = false;
-                    
-                    // Ensure video plays
-                    remoteVideo.play().then(() => {
-                        console.log('Remote video playing');
-                    }).catch(err => {
-                        console.error('Play error:', err);
-                    });
-                }
+                // Ensure video plays
+                remoteVideo.play().then(() => {
+                    console.log('Remote video playing');
+                }).catch(err => {
+                    console.error('Play error:', err);
+                });
             };
             
             // ICE candidates
@@ -696,6 +650,9 @@ try {
                 await peerConnection.setRemoteDescription(desc);
                 hasRemoteOffer = true;
                 
+                // Process any queued ICE candidates immediately
+                processPendingIceCandidates();
+                
                 const answer = await peerConnection.createAnswer();
                 await peerConnection.setLocalDescription(answer);
                 socket.emit('answer', { sdp: answer.sdp, targetId: data.senderId });
@@ -706,6 +663,7 @@ try {
                     const answerDesc = new RTCSessionDescription({ type: 'answer', sdp: pendingAnswer });
                     await peerConnection.setRemoteDescription(answerDesc);
                     pendingAnswer = null;
+                    processPendingIceCandidates();
                 }
                 
                 // Request updated offer to trigger track sending
@@ -723,13 +681,15 @@ socket.on('answer', async (data) => {
             
             if (!peerConnection) return;
             
-            // Apply answer - offerer should be in have-local-offer state
+// Apply answer - offerer should be in have-local-offer state
             if (peerConnection.signalingState === 'have-local-offer' || peerConnection.signalingState === 'have-remote-offer') {
                 if (data.sdp) {
                     try {
                         const desc = new RTCSessionDescription({ type: 'answer', sdp: data.sdp });
                         await peerConnection.setRemoteDescription(desc);
                         console.log('Answer applied successfully');
+                        // Process any queued ICE candidates immediately
+                        processPendingIceCandidates();
                     } catch (err) {
                         console.error('Error setting remote description:', err);
                     }
@@ -746,6 +706,22 @@ socket.on('answer', async (data) => {
 // Store ICE candidates until remote description is set
         let pendingIceCandidates = [];
         
+        // Process pending ICE candidates when remote description is set
+        async function processPendingIceCandidates() {
+            if (peerConnection && peerConnection.remoteDescription && pendingIceCandidates.length > 0) {
+                console.log('Processing', pendingIceCandidates.length, 'queued ICE candidates immediate');
+                const candidates = [...pendingIceCandidates];
+                pendingIceCandidates = [];
+                for (const candidate of candidates) {
+                    try {
+                        await peerConnection.addIceCandidate(new RTCIceCandidate(candidate));
+                    } catch (err) {
+                        console.error('Error adding queued ICE candidate:', err);
+                    }
+                }
+            }
+        }
+        
         socket.on('ice-candidate', async (data) => {
             // Don't process ICE candidates from yourself
             if (data.targetId === socket.id) return;
@@ -761,7 +737,7 @@ socket.on('answer', async (data) => {
             if (peerConnection.remoteDescription) {
                 try {
                     await peerConnection.addIceCandidate(new RTCIceCandidate(data.candidate));
-                    console.log('ICE candidate added');
+                    console.log('ICE candidate added immediately');
                 } catch (err) {
                     console.error('Error adding ICE candidate:', err);
                 }
@@ -771,21 +747,6 @@ socket.on('answer', async (data) => {
                 pendingIceCandidates.push(data.candidate);
             }
         });
-        
-        // Check for pending ICE candidates every 50ms
-        setInterval(async () => {
-            if (peerConnection && peerConnection.remoteDescription && pendingIceCandidates.length > 0) {
-                console.log('Processing', pendingIceCandidates.length, 'queued ICE candidates');
-                const candidates = pendingIceCandidates.splice(0);
-                for (const candidate of candidates) {
-                    try {
-                        await peerConnection.addIceCandidate(new RTCIceCandidate(candidate));
-                    } catch (err) {
-                        console.error('Error adding queued ICE candidate:', err);
-                    }
-                }
-            }
-        }, 50);
         
         socket.on('message', (data) => {
             addMessage(data.text, 'stranger');
