@@ -286,7 +286,7 @@
 </head>
 <body>
 <div class="header">
-<div class="logo">Alone<span>Chat</span> <small style="font-size:12px;color:#5cbbff;">[v3]</small></div>
+<div class="logo">Alone<span>Chat</span> <small style="font-size:12px;color:#5cbbff;">create by haqshab</small></div>
         <div class="status-bar">
             <span id="user-count">0</span> users online
         </div>
@@ -411,7 +411,7 @@ async function startChat(mode) {
             const interestText = interestInput.value.trim().toLowerCase();
             selectedInterests = interestText ? interestText.split(',').map(i => i.trim()).filter(i => i) : [];
             
-            if (mode === 'video') {
+if (mode === 'video') {
                 try {
                     localStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
                     localVideo.srcObject = localStream;
@@ -419,6 +419,11 @@ async function startChat(mode) {
                     alert('Cannot access camera/microphone: ' + err.message);
                     return;
                 }
+                // Show video wrapper for video chat
+                videoWrapper.style.display = 'grid';
+            } else {
+                // Hide video wrapper for text chat
+                videoWrapper.style.display = 'none';
             }
             
             status.textContent = 'Looking for someone...';
@@ -752,9 +757,11 @@ socket.on('answer', async (data) => {
             addMessage(data.text, 'stranger');
         });
         
-        socket.on('partner-left', () => {
-            alert('Stranger has left the chat.');
+socket.on('partner-left', () => {
+            // Auto-connect to next person without showing message
             resetChat();
+            status.textContent = 'Looking for someone...';
+            socket.emit('join', { mode: currentMode, interests: selectedInterests });
         });
         
         function sendMessage() {
