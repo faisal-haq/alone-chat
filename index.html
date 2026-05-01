@@ -475,17 +475,30 @@ peerConnection = new RTCPeerConnection(iceServers, {
                 
 // Handle incoming tracks
                 peerConnection.ontrack = (event) => {
-                    console.log('Received remote track', event.track.kind);
+                    console.log('Received remote track', event.track.kind, event.track.id);
+                    
+                    let remoteStream = null;
+                    
                     if (event.streams && event.streams[0]) {
-                        remoteVideo.srcObject = event.streams[0];
+                        remoteStream = event.streams[0];
                     } else if (event.track) {
                         // Create new stream if no streams available
-                        let stream = remoteVideo.srcObject;
-                        if (!stream) {
-                            stream = new MediaStream();
-                            remoteVideo.srcObject = stream;
-                        }
-                        stream.addTrack(event.track);
+                        remoteStream = remoteVideo.srcObject || new MediaStream();
+                        remoteStream.addTrack(event.track);
+                    }
+                    
+                    if (remoteStream) {
+                        remoteVideo.srcObject = remoteStream;
+                        remoteVideo.autoplay = true;
+                        remoteVideo.playsInline = true;
+                        remoteVideo.muted = false;
+                        
+                        // Ensure video plays
+                        remoteVideo.play().then(() => {
+                            console.log('Remote video playing');
+                        }).catch(err => {
+                            console.error('Play error:', err);
+                        });
                     }
                 };
                 
@@ -562,17 +575,30 @@ peerConnection = new RTCPeerConnection(iceServers, {
             
 // Handle incoming tracks
             peerConnection.ontrack = (event) => {
-                console.log('Received remote track (answerer)', event.track.kind);
+                console.log('Received remote track (answerer)', event.track.kind, event.track.id);
+                
+                let remoteStream = null;
+                
                 if (event.streams && event.streams[0]) {
-                    remoteVideo.srcObject = event.streams[0];
+                    remoteStream = event.streams[0];
                 } else if (event.track) {
                     // Create new stream if no streams available
-                    let stream = remoteVideo.srcObject;
-                    if (!stream) {
-                        stream = new MediaStream();
-                        remoteVideo.srcObject = stream;
-                    }
-                    stream.addTrack(event.track);
+                    remoteStream = remoteVideo.srcObject || new MediaStream();
+                    remoteStream.addTrack(event.track);
+                }
+                
+                if (remoteStream) {
+                    remoteVideo.srcObject = remoteStream;
+                    remoteVideo.autoplay = true;
+                    remoteVideo.playsInline = true;
+                    remoteVideo.muted = false;
+                    
+                    // Ensure video plays
+                    remoteVideo.play().then(() => {
+                        console.log('Remote video playing');
+                    }).catch(err => {
+                        console.error('Play error:', err);
+                    });
                 }
             };
             
@@ -649,30 +675,39 @@ socket.on('answer', async (data) => {
             }
         });
         
-        // Store ICE candidates until remote description is set
+// Store ICE candidates until remote description is set
         let pendingIceCandidates = [];
         
         socket.on('ice-candidate', async (data) => {
             // Don't process ICE candidates from yourself
             if (data.targetId === socket.id) return;
             
-            if (!peerConnection) return;
+            console.log('Received ICE candidate');
+            
+            if (!peerConnection) {
+                console.log('No peer connection, queuing candidate');
+                pendingIceCandidates.push(data.candidate);
+                return;
+            }
             
             if (peerConnection.remoteDescription) {
                 try {
                     await peerConnection.addIceCandidate(new RTCIceCandidate(data.candidate));
+                    console.log('ICE candidate added');
                 } catch (err) {
                     console.error('Error adding ICE candidate:', err);
                 }
             } else {
                 // Queue candidates for later
+                console.log('Queuing ICE candidate for later');
                 pendingIceCandidates.push(data.candidate);
             }
         });
         
-        // Check for pending ICE candidates periodically
+        // Check for pending ICE candidates every 50ms
         setInterval(async () => {
             if (peerConnection && peerConnection.remoteDescription && pendingIceCandidates.length > 0) {
+                console.log('Processing', pendingIceCandidates.length, 'queued ICE candidates');
                 const candidates = pendingIceCandidates.splice(0);
                 for (const candidate of candidates) {
                     try {
@@ -682,7 +717,7 @@ socket.on('answer', async (data) => {
                     }
                 }
             }
-        }, 100);
+        }, 50);
         
         socket.on('message', (data) => {
             addMessage(data.text, 'stranger');
