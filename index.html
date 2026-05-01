@@ -446,7 +446,7 @@ socket.on('matched', async (data) => {
             inputArea.style.display = 'flex';
             status.textContent = 'Connected to a stranger!';
             
-            // Set connection timeout (30 seconds)
+// Set connection timeout (30 seconds)
             if (connectionTimeout) clearTimeout(connectionTimeout);
             connectionTimeout = setTimeout(() => {
                 if (peerConnection && peerConnection.iceConnectionState !== 'connected' && peerConnection.iceConnectionState !== 'completed') {
@@ -455,6 +455,10 @@ socket.on('matched', async (data) => {
                     socket.emit('next');
                 }
             }, 30000);
+            
+            // Determine who creates the offer (lower socket ID)
+            const isOfferer = socket.id < partnerId;
+            console.log('Is offerer:', isOfferer, 'socket:', socket.id, 'partner:', partnerId);
             
             if (currentMode === 'video') {
                 // Close existing connection if any
@@ -465,15 +469,24 @@ socket.on('matched', async (data) => {
                 
 peerConnection = new RTCPeerConnection(iceServers, {
                     bundlePolicy: 'max-compat',
-                    sdpSemantics: 'unified-plan'
+                    sdpSemantics: 'unified-plan',
+                    iceTransportPolicy: 'all'
                 });
                 
-                // Add local tracks
-                localStream.getTracks().forEach(track => {
-                    peerConnection.addTrack(track, localStream);
-                });
+                // Use addTrack to add local streams
+                const videoTrack = localStream.getVideoTracks()[0];
+                const audioTrack = localStream.getAudioTracks()[0];
                 
-// Handle incoming tracks
+                if (videoTrack) {
+                    peerConnection.addTrack(videoTrack, localStream);
+                }
+                if (audioTrack) {
+                    peerConnection.addTrack(audioTrack, localStream);
+                }
+                
+                console.log('Local tracks added');
+                
+                // Handle incoming tracks
                 peerConnection.ontrack = (event) => {
                     console.log('Received remote track', event.track.kind, event.track.id);
                     
@@ -519,20 +532,40 @@ peerConnection = new RTCPeerConnection(iceServers, {
                             connectionTimeout = null;
                         }
                         status.textContent = 'Connected to a stranger!';
+                        console.log('ICE Connection SUCCESS!');
                     }
                 };
                 
                 peerConnection.onconnectionstatechange = () => {
                     console.log('Connection state:', peerConnection.connectionState);
+                    if (peerConnection.connectionState === 'connected') {
+                        console.log('WebRTC Connected!');
+                    }
                 };
                 
-// Create and send offer
-                try {
-                    const offer = await peerConnection.createOffer({ offerToReceiveAudio: true, offerToReceiveVideo: true });
-                    await peerConnection.setLocalDescription(offer);
-                    socket.emit('offer', { sdp: offer.sdp, targetId: partnerId });
-                } catch (err) {
-                    console.error('Error creating offer:', err);
+                // Debug: log when negotiation is needed
+                peerConnection.onnegotiationneeded = () => {
+                    console.log('Negotiation needed');
+                };
+                
+// Only the offerer creates and sends offer
+                if (isOfferer) {
+                    try {
+                        // Create offer with receive flags
+                        const offer = await peerConnection.createOffer();
+                        await peerConnection.setLocalDescription(offer);
+                        
+                        // Update to allow receiving
+                        offer.sdp = offer.sdp.replace(/a=sendonly/g, 'a=sendrecv');
+                        
+                        socket.emit('offer', { sdp: offer.sdp, targetId: partnerId });
+                        console.log('Offer sent with receive capability');
+                    } catch (err) {
+                        console.error('Error creating offer:', err);
+                    }
+                } else {
+                    // Answerer waits for offer - no action needed now
+                    console.log('Waiting for offer...');
                 }
             }
         });
@@ -553,8 +586,24 @@ socket.on('offer', async (data) => {
             
 peerConnection = new RTCPeerConnection(iceServers, {
                 bundlePolicy: 'max-compat',
-                sdpSemantics: 'unified-plan'
+                sdpSemantics: 'unified-plan',
+                iceTransportPolicy: 'all'
             });
+            
+            // Use transceivers for both - not addTrack
+            if (localStream) {
+                peerConnection.addTransceiver('video', { 
+                    direction: 'sendrecv', 
+                    streams: [localStream] 
+                });
+                peerConnection.addTransceiver('audio', { 
+                    direction: 'sendrecv', 
+                    streams: [localStream] 
+                });
+            } else {
+                peerConnection.addTransceiver('video', { direction: 'recvonly' });
+                peerConnection.addTransceiver('audio', { direction: 'recvonly' });
+            }
             
             // Set connection timeout for answerer
             if (connectionTimeout) clearTimeout(connectionTimeout);
@@ -620,11 +669,26 @@ peerConnection = new RTCPeerConnection(iceServers, {
                         connectionTimeout = null;
                     }
                     status.textContent = 'Connected to a stranger!';
+                    console.log('ICE Connection SUCCESS (answerer)!');
+                }
+                // Handle failures
+                if (peerConnection.iceConnectionState === 'failed' || peerConnection.iceConnectionState === 'disconnected') {
+                    console.log('ICE connection failed/disconnected');
+                    status.textContent = 'Connection failed. Retrying...';
+                    socket.emit('next');
                 }
             };
             
             peerConnection.onconnectionstatechange = () => {
                 console.log('Connection state:', peerConnection.connectionState);
+                if (peerConnection.connectionState === 'connected') {
+                    console.log('WebRTC Connected (answerer)!');
+                }
+            };
+            
+            // Debug
+            peerConnection.onnegotiationneeded = () => {
+                console.log('Negotiation needed (answerer)');
             };
             
 try {
@@ -632,17 +696,20 @@ try {
                 await peerConnection.setRemoteDescription(desc);
                 hasRemoteOffer = true;
                 
-                const answer = await peerConnection.createAnswer({ offerToReceiveAudio: true, offerToReceiveVideo: true });
+                const answer = await peerConnection.createAnswer();
                 await peerConnection.setLocalDescription(answer);
                 socket.emit('answer', { sdp: answer.sdp, targetId: data.senderId });
                 
-                // Apply pending answer if we received one before offer
+// Apply pending answer if we received one before offer
                 if (pendingAnswer) {
                     console.log('Applying pending answer after offer');
                     const answerDesc = new RTCSessionDescription({ type: 'answer', sdp: pendingAnswer });
                     await peerConnection.setRemoteDescription(answerDesc);
                     pendingAnswer = null;
                 }
+                
+                // Request updated offer to trigger track sending
+                console.log('Requesting tracks from remote...');
             } catch (err) {
                 console.error('Error handling offer:', err);
             }
@@ -652,10 +719,12 @@ socket.on('answer', async (data) => {
             // Don't process answers from yourself
             if (data.targetId === socket.id) return;
             
+            console.log('Received answer, state:', peerConnection?.signalingState);
+            
             if (!peerConnection) return;
             
-            // If we have remote offer, apply answer immediately
-            if (hasRemoteOffer && peerConnection.signalingState === 'have-local-offer') {
+            // Apply answer - offerer should be in have-local-offer state
+            if (peerConnection.signalingState === 'have-local-offer' || peerConnection.signalingState === 'have-remote-offer') {
                 if (data.sdp) {
                     try {
                         const desc = new RTCSessionDescription({ type: 'answer', sdp: data.sdp });
@@ -667,7 +736,6 @@ socket.on('answer', async (data) => {
                 }
             } else if (peerConnection.signalingState === 'stable') {
                 // Race condition: answer arrived before we processed offer
-                // Store it for later - will be applied when offer is processed
                 console.log('Storing pending answer for later');
                 pendingAnswer = data.sdp;
             } else {
