@@ -367,23 +367,12 @@ let localStream = null;
         
 const iceServers = {
             iceServers: [
-                // STUN servers
+                // STUN servers - Google
                 { urls: 'stun:stun.l.google.com:19302' },
                 { urls: 'stun:stun1.l.google.com:19302' },
                 { urls: 'stun:stun2.l.google.com:19302' },
-                { urls: 'stun:stun3.l.google.com:19302' },
-                { urls: 'stun:stun4.l.google.com:19302' },
-                // Free public TURN server (limited capacity)
-                { 
-                    urls: 'turn:global-turn1.xirs.net:80',
-                    username: 'guest',
-                    credential: 'someguest'
-                },
-                {
-                    urls: 'turn:global-turn2.xirs.net:443',
-                    username: 'guest', 
-                    credential: 'someguest'
-                }
+                // STUN servers - Twilio
+                { urls: 'stun:global.stun.twilio.com:3478' }
             ],
             iceCandidatePoolSize: 10
         };
@@ -474,22 +463,29 @@ socket.on('matched', async (data) => {
                     peerConnection = null;
                 }
                 
-                peerConnection = new RTCPeerConnection(iceServers);
+peerConnection = new RTCPeerConnection(iceServers, {
+                    bundlePolicy: 'max-compat',
+                    sdpSemantics: 'unified-plan'
+                });
                 
                 // Add local tracks
                 localStream.getTracks().forEach(track => {
                     peerConnection.addTrack(track, localStream);
                 });
                 
-                // Handle incoming tracks
+// Handle incoming tracks
                 peerConnection.ontrack = (event) => {
-                    console.log('Received remote track');
+                    console.log('Received remote track', event.track.kind);
                     if (event.streams && event.streams[0]) {
                         remoteVideo.srcObject = event.streams[0];
-                    } else {
-                        // Create new stream if needed
-                        const newStream = new MediaStream(event.streams.map(s => s));
-                        remoteVideo.srcObject = newStream;
+                    } else if (event.track) {
+                        // Create new stream if no streams available
+                        let stream = remoteVideo.srcObject;
+                        if (!stream) {
+                            stream = new MediaStream();
+                            remoteVideo.srcObject = stream;
+                        }
+                        stream.addTrack(event.track);
                     }
                 };
                 
@@ -542,9 +538,12 @@ socket.on('offer', async (data) => {
             hasRemoteOffer = false;
             pendingAnswer = null;
             
-            peerConnection = new RTCPeerConnection(iceServers);
+peerConnection = new RTCPeerConnection(iceServers, {
+                bundlePolicy: 'max-compat',
+                sdpSemantics: 'unified-plan'
+            });
             
-            // Set connection timeout for answerer (30 seconds)
+            // Set connection timeout for answerer
             if (connectionTimeout) clearTimeout(connectionTimeout);
             connectionTimeout = setTimeout(() => {
                 if (peerConnection && peerConnection.iceConnectionState !== 'connected' && peerConnection.iceConnectionState !== 'completed') {
@@ -561,11 +560,19 @@ socket.on('offer', async (data) => {
                 });
             }
             
-            // Handle incoming tracks
-peerConnection.ontrack = (event) => {
-                console.log('Received remote track (answerer)');
+// Handle incoming tracks
+            peerConnection.ontrack = (event) => {
+                console.log('Received remote track (answerer)', event.track.kind);
                 if (event.streams && event.streams[0]) {
                     remoteVideo.srcObject = event.streams[0];
+                } else if (event.track) {
+                    // Create new stream if no streams available
+                    let stream = remoteVideo.srcObject;
+                    if (!stream) {
+                        stream = new MediaStream();
+                        remoteVideo.srcObject = stream;
+                    }
+                    stream.addTrack(event.track);
                 }
             };
             
