@@ -4,6 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>AloneChat - Talk to Strangers</title>
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>💬</text></svg>">
     <style>
         * {
             margin: 0;
@@ -355,6 +356,9 @@ let localStream = null;
         let currentMode = null;
         let partnerId = null;
         let selectedInterests = [];
+        let hasRemoteOffer = false;
+        let pendingAnswer = null;
+        let connectionTimeout = null;
         
         // Listen for user count updates
         socket.on('user-count', (data) => {
@@ -443,11 +447,25 @@ socket.on('matched', async (data) => {
                 return;
             }
             
+            // Reset state for new connection
+            hasRemoteOffer = false;
+            pendingAnswer = null;
+            
             partnerId = data.partnerId;
             waitingMsg.style.display = 'none';
             chatMessages.style.display = 'grid';
             inputArea.style.display = 'flex';
             status.textContent = 'Connected to a stranger!';
+            
+            // Set connection timeout (30 seconds)
+            if (connectionTimeout) clearTimeout(connectionTimeout);
+            connectionTimeout = setTimeout(() => {
+                if (peerConnection && peerConnection.iceConnectionState !== 'connected' && peerConnection.iceConnectionState !== 'completed') {
+                    console.log('Connection timeout - retrying...');
+                    status.textContent = 'Connection timeout. Retrying...';
+                    socket.emit('next');
+                }
+            }, 30000);
             
             if (currentMode === 'video') {
                 // Close existing connection if any
@@ -482,9 +500,17 @@ socket.on('matched', async (data) => {
                     }
                 };
                 
-                // ICE connection state
+// ICE connection state
                 peerConnection.oniceconnectionstatechange = () => {
                     console.log('ICE connection state:', peerConnection.iceConnectionState);
+                    // Clear timeout on successful connection
+                    if (peerConnection.iceConnectionState === 'connected' || peerConnection.iceConnectionState === 'completed') {
+                        if (connectionTimeout) {
+                            clearTimeout(connectionTimeout);
+                            connectionTimeout = null;
+                        }
+                        status.textContent = 'Connected to a stranger!';
+                    }
                 };
                 
                 peerConnection.onconnectionstatechange = () => {
@@ -512,7 +538,21 @@ socket.on('offer', async (data) => {
                 peerConnection = null;
             }
             
+            // Reset state for new connection
+            hasRemoteOffer = false;
+            pendingAnswer = null;
+            
             peerConnection = new RTCPeerConnection(iceServers);
+            
+            // Set connection timeout for answerer (30 seconds)
+            if (connectionTimeout) clearTimeout(connectionTimeout);
+            connectionTimeout = setTimeout(() => {
+                if (peerConnection && peerConnection.iceConnectionState !== 'connected' && peerConnection.iceConnectionState !== 'completed') {
+                    console.log('Connection timeout - retrying...');
+                    status.textContent = 'Connection timeout. Retrying...';
+                    socket.emit('next');
+                }
+            }, 30000);
             
             // Add local tracks if available
             if (localStream) {
@@ -537,9 +577,17 @@ peerConnection.ontrack = (event) => {
                 }
             };
             
-            // ICE connection state
+// ICE connection state
             peerConnection.oniceconnectionstatechange = () => {
                 console.log('ICE connection state:', peerConnection.iceConnectionState);
+                // Clear timeout on successful connection
+                if (peerConnection.iceConnectionState === 'connected' || peerConnection.iceConnectionState === 'completed') {
+                    if (connectionTimeout) {
+                        clearTimeout(connectionTimeout);
+                        connectionTimeout = null;
+                    }
+                    status.textContent = 'Connected to a stranger!';
+                }
             };
             
             peerConnection.onconnectionstatechange = () => {
@@ -549,9 +597,19 @@ peerConnection.ontrack = (event) => {
 try {
                 const desc = new RTCSessionDescription({ type: 'offer', sdp: data.sdp });
                 await peerConnection.setRemoteDescription(desc);
+                hasRemoteOffer = true;
+                
                 const answer = await peerConnection.createAnswer({ offerToReceiveAudio: true, offerToReceiveVideo: true });
                 await peerConnection.setLocalDescription(answer);
                 socket.emit('answer', { sdp: answer.sdp, targetId: data.senderId });
+                
+                // Apply pending answer if we received one before offer
+                if (pendingAnswer) {
+                    console.log('Applying pending answer after offer');
+                    const answerDesc = new RTCSessionDescription({ type: 'answer', sdp: pendingAnswer });
+                    await peerConnection.setRemoteDescription(answerDesc);
+                    pendingAnswer = null;
+                }
             } catch (err) {
                 console.error('Error handling offer:', err);
             }
@@ -563,16 +621,22 @@ socket.on('answer', async (data) => {
             
             if (!peerConnection) return;
             
-            // Only set remote description if we're in have-local-offer state
-            if (peerConnection.signalingState === 'have-local-offer') {
+            // If we have remote offer, apply answer immediately
+            if (hasRemoteOffer && peerConnection.signalingState === 'have-local-offer') {
                 if (data.sdp) {
                     try {
                         const desc = new RTCSessionDescription({ type: 'answer', sdp: data.sdp });
                         await peerConnection.setRemoteDescription(desc);
+                        console.log('Answer applied successfully');
                     } catch (err) {
                         console.error('Error setting remote description:', err);
                     }
                 }
+            } else if (peerConnection.signalingState === 'stable') {
+                // Race condition: answer arrived before we processed offer
+                // Store it for later - will be applied when offer is processed
+                console.log('Storing pending answer for later');
+                pendingAnswer = data.sdp;
             } else {
                 console.log('Ignoring answer - wrong state:', peerConnection.signalingState);
             }
@@ -665,11 +729,17 @@ socket.on('answer', async (data) => {
             inputArea.style.display = 'none';
         }
         
-        function resetChat() {
+function resetChat() {
             partnerId = null;
             chatMessages.innerHTML = '';
             messageInput.value = '';
             remoteVideo.srcObject = null;
+            hasRemoteOffer = false;
+            pendingAnswer = null;
+            if (connectionTimeout) {
+                clearTimeout(connectionTimeout);
+                connectionTimeout = null;
+            }
         }
     </script>
 </body>
