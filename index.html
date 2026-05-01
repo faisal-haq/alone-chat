@@ -780,19 +780,26 @@ socket.on('partner-left', () => {
             chatMessages.appendChild(div);
         }
         
-        function stopChat() {
+function stopChat() {
+            // Stop all local media tracks
+            if (localStream) {
+                localStream.getTracks().forEach(track => track.stop());
+                localStream = null;
+                localVideo.srcObject = null;
+            }
+            // Close peer connection
             if (peerConnection) {
                 peerConnection.close();
                 peerConnection = null;
             }
-            if (localStream) {
-                localStream.getTracks().forEach(track => track.stop());
-                localStream = null;
-            }
+            // Stop local video display
+            remoteVideo.srcObject = null;
+            
             socket.emit('next');
             resetChat();
             introScreen.style.display = 'block';
             chatScreen.classList.remove('active');
+            videoWrapper.style.display = 'none';
         }
         
         function nextChat() {
