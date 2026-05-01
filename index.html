@@ -758,10 +758,24 @@ socket.on('answer', async (data) => {
         });
         
 socket.on('partner-left', () => {
-            // Auto-connect to next person without showing message
+            // Stop all tracks when partner leaves
+            if (localStream) {
+                localStream.getTracks().forEach(track => track.stop());
+                localStream = null;
+                localVideo.srcObject = null;
+            }
+            if (peerConnection) {
+                peerConnection.close();
+                peerConnection = null;
+            }
+            remoteVideo.srcObject = null;
+            
+            // Show intro screen when partner disconnects (they stopped the chat)
             resetChat();
-            status.textContent = 'Looking for someone...';
-            socket.emit('join', { mode: currentMode, interests: selectedInterests });
+            introScreen.style.display = 'block';
+            chatScreen.classList.remove('active');
+            videoWrapper.style.display = 'none';
+            status.textContent = 'Partner left. Connection ended.';
         });
         
         function sendMessage() {
