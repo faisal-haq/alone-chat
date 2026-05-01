@@ -16,21 +16,38 @@ const io = socketIo(server, {
 
 app.use(express.static(path.join(__dirname)));
 
-// Track connected users and their modes
-let allUsers = new Set();
+// Track connected users by IP address (one IP = one person)
+let usersByIP = new Map(); // ip -> { socket, mode }
+let allIPs = new Set();
 let waitingVideoUsers = [];
 let waitingTextUsers = [];
 
+// Get client IP from socket
+function getClientIP(socket) {
+  // Check for forwarded header (if behind proxy)
+  const forwarded = socket.handshake.headers['x-forwarded-for'];
+  if (forwarded) {
+    return forwarded.split(',')[0].trim();
+  }
+  return socket.handshake.address;
+}
+
 // Broadcast user count to all connected clients
 function broadcastUserCount() {
-  const count = allUsers.size;
+  const count = allIPs.size;
   io.emit('user-count', { count: count });
-  console.log(`Live users: ${count}`);
+  console.log(`Live users (by IP): ${count}`);
 }
 
 io.on('connection', (socket) => {
-  console.log('User connected:', socket.id);
-  allUsers.add(socket.id);
+  const clientIP = getClientIP(socket);
+  console.log('User connected:', socket.id, 'IP:', clientIP);
+  
+  // Only count unique IPs (one IP = one person)
+  if (!usersByIP.has(clientIP)) {
+    allIPs.add(clientIP);
+  }
+  usersByIP.set(clientIP, { socket: socket, mode: null });
   broadcastUserCount();
   
   let currentMode = null;
@@ -38,6 +55,12 @@ io.on('connection', (socket) => {
 socket.on('join', (data = {}) => {
     currentMode = data.mode || 'video';
     socket.mode = currentMode;
+    
+    // Update user IP record
+    const ipData = usersByIP.get(clientIP);
+    if (ipData) {
+      ipData.mode = currentMode;
+    }
     
     // Find a partner - but NOT yourself!
     let partner = null;
@@ -162,22 +185,26 @@ socket.on('next', () => {
   });
 
 socket.on('disconnect', () => {
-    console.log('User disconnected:', socket.id);
-    allUsers.delete(socket.id);
-    broadcastUserCount();
-    
-    if (socket.partner) {
-      socket.partner.emit('partner-left');
-      socket.partner.partner = null;
-    }
-    
-    const mode = socket.mode || 'video';
-    const waitingList = mode === 'video' ? waitingVideoUsers : waitingTextUsers;
-    const index = waitingList.indexOf(socket);
-    if (index > -1) {
-      waitingList.splice(index, 1);
-    }
-  });
+  const clientIP = getClientIP(socket);
+  console.log('User disconnected:', socket.id, 'IP:', clientIP);
+  
+  // Remove from IP tracking
+  usersByIP.delete(clientIP);
+  allIPs.delete(clientIP);
+  broadcastUserCount();
+  
+  if (socket.partner) {
+    socket.partner.emit('partner-left');
+    socket.partner.partner = null;
+  }
+  
+  const mode = socket.mode || 'video';
+  const waitingList = mode === 'video' ? waitingVideoUsers : waitingTextUsers;
+  const index = waitingList.indexOf(socket);
+  if (index > -1) {
+    waitingList.splice(index, 1);
+  }
+});
 });
 
 const PORT = process.env.PORT || 3001;

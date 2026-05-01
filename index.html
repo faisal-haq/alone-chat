@@ -770,12 +770,16 @@ socket.on('partner-left', () => {
             }
             remoteVideo.srcObject = null;
             
-            // Show intro screen when partner disconnects (they stopped the chat)
+            // Go back to wait for a NEW partner (don't auto-match immediately)
             resetChat();
-            introScreen.style.display = 'block';
-            chatScreen.classList.remove('active');
-            videoWrapper.style.display = 'none';
-            status.textContent = 'Partner left. Connection ended.';
+            status.textContent = 'Partner stopped. Looking for someone new...';
+            waitingMsg.style.display = 'block';
+            chatMessages.style.display = 'none';
+            inputArea.style.display = 'none';
+            videoWrapper.style.display = currentMode === 'video' ? 'grid' : 'none';
+            
+            // Join the waiting list so server can match with DIFFERENT person
+            socket.emit('join', { mode: currentMode, interests: selectedInterests });
         });
         
         function sendMessage() {
@@ -809,11 +813,17 @@ function stopChat() {
             // Stop local video display
             remoteVideo.srcObject = null;
             
-            socket.emit('next');
+            // Use 'next' event so server finds the partner a new match
+            if (partnerId) {
+                socket.emit('next');
+            }
+            
+            // Go back to intro screen
             resetChat();
             introScreen.style.display = 'block';
             chatScreen.classList.remove('active');
             videoWrapper.style.display = 'none';
+            status.textContent = 'Looking for someone...';
         }
         
         function nextChat() {
