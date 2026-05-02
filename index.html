@@ -826,12 +826,59 @@ function stopChat() {
             status.textContent = 'Looking for someone...';
         }
         
-        function nextChat() {
-            if (partnerId) {
+async function nextChat() {
+            // Store old partner before resetting
+            const oldPartnerId = partnerId;
+            
+// Close and reset peer connection completely
+            if (peerConnection) {
+                peerConnection.close();
+                peerConnection = null;
+            }
+            
+            // Clear remote video and force reload to prevent showing stale content
+            remoteVideo.srcObject = null;
+            remoteVideo.load(); // Force reload the video element
+            
+// Reset ALL state - CRITICAL to prevent race conditions
+            partnerId = null;
+            hasRemoteOffer = false;
+            pendingAnswer = null;
+            pendingIceCandidates = [];
+            
+            // Clear connection timeout completely
+            if (connectionTimeout) {
+                clearTimeout(connectionTimeout);
+                connectionTimeout = null;
+            }
+            
+            // Stop existing local stream tracks
+            if (localStream) {
+                localStream.getTracks().forEach(track => track.stop());
+                localStream = null;
+            }
+            
+// Get fresh local stream for video mode - WAIT for it before proceeding
+            if (currentMode === 'video') {
+                try {
+                    localStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
+                    localVideo.srcObject = localStream;
+                    localVideo.load(); // Force reload to ensure video displays
+                    console.log('Local stream refreshed for new connection');
+                } catch (err) {
+                    console.error('Error refreshing local stream:', err);
+                    alert('Cannot access camera/microphone: ' + err.message);
+                    return;
+                }
+            }
+            
+            // Tell OLD partner we disconnected so they can find someone else
+            if (oldPartnerId) {
                 socket.emit('partner-left');
             }
+            
+            // Find a new partner (only after stream is ready!)
             socket.emit('next');
-            resetChat();
             status.textContent = 'Looking for someone...';
             waitingMsg.style.display = 'block';
             chatMessages.style.display = 'none';
@@ -842,7 +889,6 @@ function resetChat() {
             partnerId = null;
             chatMessages.innerHTML = '';
             messageInput.value = '';
-            remoteVideo.srcObject = null;
             hasRemoteOffer = false;
             pendingAnswer = null;
             if (connectionTimeout) {
