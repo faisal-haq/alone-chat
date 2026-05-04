@@ -1,79 +1,139 @@
 <!DOCTYPE html>
 <html>
-<head><title>AloneChat Fixed</title></head>
+<head><title>AloneChat Final</title></head>
 <body>
 
-<button onclick="start()">Start Video</button>
-<button onclick="next()">Next</button>
+<h2>AloneChat (Fixed)</h2>
+
+<button onclick="startChat()">Start Video</button>
+<button onclick="nextChat()">Next</button>
 
 <br><br>
 
-<video id="local" autoplay muted playsinline width="200"></video>
-<video id="remote" autoplay playsinline width="200"></video>
+<video id="localVideo" autoplay muted playsinline width="200"></video>
+<video id="remoteVideo" autoplay playsinline width="200"></video>
 
 <script src="/socket.io/socket.io.js"></script>
 <script>
 const socket = io();
-let localStream, pc, partnerId;
 
-const config = { iceServers: [{ urls: "stun:stun.l.google.com:19302" }] };
+let localStream = null;
+let peerConnection = null;
+let partnerId = null;
+let pendingIceCandidates = [];
+let currentMode = "video";
 
-async function start(){
+const iceServers = {
+  iceServers: [{urls:'stun:stun.l.google.com:19302'}]
+};
+
+async function startChat(){
   localStream = await navigator.mediaDevices.getUserMedia({video:true,audio:true});
-  document.getElementById("local").srcObject = localStream;
-  socket.emit("join",{mode:"video"});
+  document.getElementById("localVideo").srcObject = localStream;
+
+  socket.emit('join',{mode:currentMode});
 }
 
-socket.on("matched", async (data)=>{
+socket.on('matched', async data=>{
   partnerId = data.partnerId;
-  createPC();
 
-  if(Math.random()>0.5){
-    const offer = await pc.createOffer();
-    await pc.setLocalDescription(offer);
-    socket.emit("offer",{sdp:offer.sdp,targetId:partnerId});
-  }
-});
+  peerConnection = new RTCPeerConnection(iceServers);
 
-function createPC(){
-  pc = new RTCPeerConnection(config);
-  localStream.getTracks().forEach(t=>pc.addTrack(t,localStream));
+  localStream.getTracks().forEach(track=>{
+    peerConnection.addTrack(track, localStream);
+  });
 
-  pc.ontrack = e=>{
-    document.getElementById("remote").srcObject = e.streams[0];
-  };
-
-  pc.onicecandidate = e=>{
-    if(e.candidate){
-      socket.emit("ice-candidate",{candidate:e.candidate,targetId:partnerId});
+  peerConnection.ontrack = (event)=>{
+    if(event.streams && event.streams[0]){
+      document.getElementById("remoteVideo").srcObject = event.streams[0];
     }
   };
-}
 
-socket.on("offer", async data=>{
-  if(!pc) createPC();
+  peerConnection.onicecandidate = (e)=>{
+    if(e.candidate){
+      socket.emit('ice-candidate',{
+        candidate:e.candidate,
+        targetId:partnerId
+      });
+    }
+  };
 
-  await pc.setRemoteDescription({type:"offer",sdp:data.sdp});
-  const answer = await pc.createAnswer();
-  await pc.setLocalDescription(answer);
+  const isOfferer = socket.id < partnerId;
+  if(isOfferer){
+    const offer = await peerConnection.createOffer();
+    await peerConnection.setLocalDescription(offer);
 
-  socket.emit("answer",{sdp:answer.sdp,targetId:data.senderId});
-});
-
-socket.on("answer", async data=>{
-  await pc.setRemoteDescription({type:"answer",sdp:data.sdp});
-});
-
-socket.on("ice-candidate", async data=>{
-  if(pc.remoteDescription){
-    await pc.addIceCandidate(data.candidate);
+    socket.emit('offer',{
+      sdp:offer.sdp,
+      targetId:partnerId
+    });
   }
 });
 
-function next(){
-  if(pc) pc.close();
-  document.getElementById("remote").srcObject=null;
-  socket.emit("next");
+socket.on('offer', async data=>{
+  if(!peerConnection){
+    peerConnection = new RTCPeerConnection(iceServers);
+
+    localStream.getTracks().forEach(track=>{
+      peerConnection.addTrack(track, localStream);
+    });
+
+    peerConnection.ontrack = (event)=>{
+      if(event.streams && event.streams[0]){
+        document.getElementById("remoteVideo").srcObject = event.streams[0];
+      }
+    };
+
+    peerConnection.onicecandidate = (e)=>{
+      if(e.candidate){
+        socket.emit('ice-candidate',{
+          candidate:e.candidate,
+          targetId:data.senderId
+        });
+      }
+    };
+  }
+
+  await peerConnection.setRemoteDescription({
+    type:'offer',
+    sdp:data.sdp
+  });
+
+  const answer = await peerConnection.createAnswer();
+  await peerConnection.setLocalDescription(answer);
+
+  socket.emit('answer',{
+    sdp:answer.sdp,
+    targetId:data.senderId
+  });
+});
+
+socket.on('answer', async data=>{
+  await peerConnection.setRemoteDescription({
+    type:'answer',
+    sdp:data.sdp
+  });
+});
+
+socket.on('ice-candidate', async data=>{
+  if(peerConnection && peerConnection.remoteDescription){
+    await peerConnection.addIceCandidate(data.candidate);
+  }else{
+    pendingIceCandidates.push(data.candidate);
+  }
+});
+
+function nextChat(){
+  pendingIceCandidates = [];
+
+  if(peerConnection){
+    peerConnection.close();
+    peerConnection = null;
+  }
+
+  document.getElementById("remoteVideo").srcObject = null;
+
+  socket.emit('next');
 }
 </script>
 
