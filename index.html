@@ -315,24 +315,209 @@ async function nextChat(){
     localLoading.style.display = 'flex';
     try{
       localStream = await navigator.mediaDevices.getUserMedia({video: true, audio: true});
+<script src="/socket.io/socket.io.js"></script><script>
+const socket = io();
+
+let localStream = null;
+let peerConnection = null;
+let partnerId = null;
+let currentMode = null;
+let pendingIceCandidates = [];
+
+const iceConfig = {
+  iceServers: [
+    { urls: "stun:stun.l.google.com:19302" },
+    { urls: "stun:stun1.l.google.com:19302" }
+  ]
+};
+
+// DOM
+const localVideo = document.getElementById("local-video");
+const remoteVideo = document.getElementById("remote-video");
+const remoteLoading = document.getElementById("remote-loading");
+const localLoading = document.getElementById("local-loading");
+
+// ================= START =================
+document.getElementById("btn-video").onclick = () => startChat("video");
+document.getElementById("next-btn").onclick = nextChat;
+document.getElementById("stop-btn").onclick = stopChat;
+
+async function startChat(mode) {
+  currentMode = mode;
+
+  if (mode === "video") {
+    try {
+      localStream = await navigator.mediaDevices.getUserMedia({
+        video: true,
+        audio: true
+      });
+
       localVideo.srcObject = localStream;
-      localLoading.style.display = 'none';
-    }catch(err){
-      localLoading.style.display = 'none';
-      console.error('Fresh stream error:', err);
+      localLoading.style.display = "none";
+
+    } catch (e) {
+      alert("Camera permission denied");
+      return;
     }
   }
-  
-  // Find new partner
-  socket.emit('next');
-  status.textContent = 'Looking for someone new...';
-  waitingMsg.style.display = 'block';
-  chatMessages.classList.remove('active');
-  inputArea.classList.remove('active');
+
+  socket.emit("join");
 }
 
-function resetChat(){partnerId=null;chatMessages.innerHTML='';messageInput.value='';hasRemoteOffer=false;pendingAnswer=null;if(connectionTimeout)clearTimeout(connectionTimeout);isMuted=false;document.getElementById('mute-btn').classList.remove('muted');isCameraOff=false;document.getElementById('camera-btn').classList.remove('camera-off');localVideo.style.display='block';}
+// ================= MATCH =================
+socket.on("matched", async (data) => {
+  partnerId = data.partnerId;
 
-console.log('✅ AloneChat - Uhmegle UI + FULL WebRTC functionality!');
+  createPeer();
+
+  const isOfferer = Math.random() > 0.5;
+
+  if (isOfferer) {
+    const offer = await peerConnection.createOffer();
+    await peerConnection.setLocalDescription(offer);
+
+    socket.emit("offer", {
+      sdp: offer.sdp,
+      targetId: partnerId
+    });
+  }
+});
+
+// ================= CREATE PEER =================
+function createPeer() {
+  peerConnection = new RTCPeerConnection(iceConfig);
+
+  if (localStream) {
+    localStream.getTracks().forEach(track => {
+      peerConnection.addTrack(track, localStream);
+    });
+  }
+
+  // ✅ FIXED REMOTE VIDEO
+  peerConnection.ontrack = (event) => {
+    if (event.streams && event.streams[0]) {
+      remoteVideo.srcObject = event.streams[0];
+    } else {
+      let stream = remoteVideo.srcObject || new MediaStream();
+      stream.addTrack(event.track);
+      remoteVideo.srcObject = stream;
+    }
+
+    remoteVideo.play().catch(() => {});
+    remoteLoading.style.display = "none";
+  };
+
+  // ✅ FIXED ICE
+  peerConnection.onicecandidate = (event) => {
+    if (event.candidate) {
+      socket.emit("ice-candidate", {
+        candidate: event.candidate,
+        targetId: partnerId
+      });
+    }
+  };
+}
+
+// ================= OFFER =================
+socket.on("offer", async (data) => {
+  if (!peerConnection) createPeer();
+
+  await peerConnection.setRemoteDescription(
+    new RTCSessionDescription({
+      type: "offer",
+      sdp: data.sdp
+    })
+  );
+
+  processCandidates();
+
+  const answer = await peerConnection.createAnswer();
+  await peerConnection.setLocalDescription(answer);
+
+  socket.emit("answer", {
+    sdp: answer.sdp,
+    targetId: data.senderId
+  });
+});
+
+// ================= ANSWER =================
+socket.on("answer", async (data) => {
+  await peerConnection.setRemoteDescription(
+    new RTCSessionDescription({
+      type: "answer",
+      sdp: data.sdp
+    })
+  );
+
+  processCandidates();
+});
+
+// ================= ICE RECEIVE =================
+socket.on("ice-candidate", async (data) => {
+  if (peerConnection && peerConnection.remoteDescription) {
+    try {
+      await peerConnection.addIceCandidate(
+        new RTCIceCandidate(data.candidate)
+      );
+    } catch (e) {}
+  } else {
+    pendingIceCandidates.push(data.candidate);
+  }
+});
+
+// ================= PROCESS ICE =================
+async function processCandidates() {
+  for (let c of pendingIceCandidates) {
+    try {
+      await peerConnection.addIceCandidate(
+        new RTCIceCandidate(c)
+      );
+    } catch (e) {}
+  }
+  pendingIceCandidates = [];
+}
+
+// ================= NEXT =================
+async function nextChat() {
+  cleanup();
+
+  if (currentMode === "video") {
+    localStream = await navigator.mediaDevices.getUserMedia({
+      video: true,
+      audio: true
+    });
+    localVideo.srcObject = localStream;
+  }
+
+  socket.emit("next");
+}
+
+// ================= STOP =================
+function stopChat() {
+  cleanup();
+  socket.emit("next");
+}
+
+// ================= CLEANUP =================
+function cleanup() {
+  if (peerConnection) {
+    peerConnection.close();
+    peerConnection = null;
+  }
+
+  if (localStream) {
+    localStream.getTracks().forEach(t => t.stop());
+    localStream = null;
+  }
+
+  remoteVideo.srcObject = null;
+  pendingIceCandidates = [];
+}
+
+// ================= PARTNER LEFT =================
+socket.on("partner-left", () => {
+  cleanup();
+});
+
 </script>
 </html>
