@@ -257,16 +257,30 @@ socket.on('matched',async data=>{
   partnerId=data.partnerId;waitingMsg.style.display='none';chatMessages.classList.add('active');inputArea.classList.add('active');status.textContent='Connected!';previewStatusEl.innerHTML='✅ Connected <span style="color:var(--accent2)">●</span>';showToast('Connected! 👋');
   if(connectionTimeout)clearTimeout(connectionTimeout);connectionTimeout=setTimeout(()=>{if(peerConnection&&peerConnection.iceConnectionState!=='connected'&&peerConnection.iceConnectionState!=='completed'){status.textContent='Timeout. Retrying...';socket.emit('next');}},30000);
   if(peerConnection){peerConnection.close();peerConnection=null;}
-  peerConnection=new RTCPeerConnection(iceServers,{bundlePolicy:'max-compat',sdpSemantics:'unified-plan',iceTransportPolicy:'relay'});
+  hasRemoteOffer=false;pendingIceCandidates=[];
+  peerConnection=new RTCPeerConnection(iceServers,{bundlePolicy:'max-compat',sdpSemantics:'unified-plan'});
+  // Always add current localStream tracks to the new peer connection
   if(localStream&&localStream.getTracks().length>0){localStream.getTracks().forEach(track=>peerConnection.addTrack(track,localStream));}
-  peerConnection.ontrack=e=>{console.log('Remote track:',e.track.kind);if(e.track.kind==='video')remoteLoading.style.display='none';if(e.streams[0])remoteVideo.srcObject=e.streams[0];else{let s=remoteVideo.srcObject||new MediaStream();s.addTrack(e.track);remoteVideo.srcObject=s;}remoteVideo.play().catch(console.error);};
+  peerConnection.ontrack=e=>{console.log('Remote track:',e.track.kind);if(e.track.kind==='video')remoteLoading.style.display='none';if(e.streams&&e.streams[0])remoteVideo.srcObject=e.streams[0];else{let s=remoteVideo.srcObject||new MediaStream();s.addTrack(e.track);remoteVideo.srcObject=s;}remoteVideo.play().catch(console.error);};
   peerConnection.onicecandidate=e=>{if(e.candidate)socket.emit('ice-candidate',{candidate:e.candidate,targetId:partnerId});};
   peerConnection.oniceconnectionstatechange=()=>{console.log('ICE:',peerConnection.iceConnectionState);if(['connected','completed'].includes(peerConnection.iceConnectionState)){clearTimeout(connectionTimeout);connectionTimeout=null;}};
-  const isOfferer=socket.id<partnerId;if(isOfferer){const offer=await peerConnection.createOffer({offerToReceiveAudio:1,offerToReceiveVideo:1});await peerConnection.setLocalDescription(offer);socket.emit('offer',{sdp:offer.sdp,targetId:partnerId});}else console.log('Waiting offer...');
+  remoteLoading.style.display='flex';
+  const isOfferer=socket.id<partnerId;if(isOfferer){const offer=await peerConnection.createOffer({offerToReceiveAudio:1,offerToReceiveVideo:1});await peerConnection.setLocalDescription(offer);socket.emit('offer',{sdp:offer.sdp,targetId:partnerId});}else console.log('Waiting for offer...');
 });
 
 socket.on('offer',async data=>{
-  if(!peerConnection){peerConnection=new RTCPeerConnection(iceServers,{bundlePolicy:'max-compat',sdpSemantics:'unified-plan',iceTransportPolicy:'relay'});if(localStream)localStream.getTracks().forEach(t=>peerConnection.addTrack(t,localStream));peerConnection.ontrack=event=> {/* same ontrack */};peerConnection.onicecandidate=e=> {/* same */};}
+  if(!peerConnection){
+    peerConnection=new RTCPeerConnection(iceServers,{bundlePolicy:'max-compat',sdpSemantics:'unified-plan'});
+    if(localStream)localStream.getTracks().forEach(t=>peerConnection.addTrack(t,localStream));
+    peerConnection.ontrack=e=>{
+      console.log('Remote track (offer path):',e.track.kind);
+      if(e.track.kind==='video')remoteLoading.style.display='none';
+      if(e.streams&&e.streams[0])remoteVideo.srcObject=e.streams[0];
+      else{let s=remoteVideo.srcObject||new MediaStream();s.addTrack(e.track);remoteVideo.srcObject=s;}
+      remoteVideo.play().catch(console.error);
+    };
+    peerConnection.onicecandidate=e=>{if(e.candidate)socket.emit('ice-candidate',{candidate:e.candidate,targetId:partnerId});};
+  }
   const desc=new RTCSessionDescription({type:'offer',sdp:data.sdp});await peerConnection.setRemoteDescription(desc);hasRemoteOffer=true;processPendingIceCandidates();const answer=await peerConnection.createAnswer();await peerConnection.setLocalDescription(answer);socket.emit('answer',{sdp:answer.sdp,targetId:data.senderId});
 });
 
@@ -278,7 +292,7 @@ async function processPendingIceCandidates(){if(peerConnection&&peerConnection.r
 
 socket.on('message',data=>addMessage(data.text,'stranger'));
 
-socket.on('partner-left',()=>{if(localStream)localStream.getTracks().forEach(t=>t.stop());if(peerConnection){peerConnection.close();peerConnection=null;}remoteVideo.srcObject=null;remoteLoading.style.display='none';resetChat();status.textContent='Partner left. Finding new...';waitingMsg.style.display='block';chatMessages.classList.remove('active');inputArea.classList.remove('active');videoWrapper.style.display=currentMode==='video'?'grid':'none';socket.emit('join',{mode:currentMode,interests:selectedInterests});});
+socket.on('partner-left',()=>{if(peerConnection){peerConnection.close();peerConnection=null;}remoteVideo.srcObject=null;remoteLoading.style.display='flex';resetChat();status.textContent='Partner left. Finding new...';waitingMsg.style.display='block';chatMessages.classList.remove('active');inputArea.classList.remove('active');videoWrapper.style.display=currentMode==='video'?'grid':'none';socket.emit('join',{mode:currentMode,interests:selectedInterests});});
 
 function sendMessage(){const text=messageInput.value.trim();if(text&&partnerId){socket.emit('message',{text});addMessage(text,'you');messageInput.value='';}}
 
@@ -292,38 +306,35 @@ function stopChat(){if(localStream)localStream.getTracks().forEach(t=>t.stop());
 
 async function nextChat(){
   const oldPartnerId = partnerId;
-  
-  // CRITICAL: Complete cleanup FIRST
+
+  // Close old peer connection only — do NOT stop localStream
   if(peerConnection){peerConnection.close();peerConnection=null;}
-  if(localStream){localStream.getTracks().forEach(track=>track.stop());localStream=null;}
-  localVideo.srcObject = null;
   remoteVideo.srcObject = null;
-  remoteLoading.style.display = 'none';
-  
-  // Reset ALL state
+  remoteLoading.style.display = 'flex';
+
+  // Reset signaling state
   partnerId = null;
   hasRemoteOffer = false;
   pendingAnswer = null;
   pendingIceCandidates = [];
   if(connectionTimeout)clearTimeout(connectionTimeout);
-  
-  // Tell server we left old partner
-  if(oldPartnerId)socket.emit('partner-left');
-  
-  // Fresh local stream for NEW connection
-  if(currentMode === 'video'){
+  chatMessages.innerHTML = '';
+  messageInput.value = '';
+
+  // If video mode but stream was lost for any reason, re-acquire it
+  if(currentMode === 'video' && (!localStream || localStream.getTracks().every(t=>t.readyState==='ended'))){
     localLoading.style.display = 'flex';
     try{
-      localStream = await navigator.mediaDevices.getUserMedia({video: true, audio: true});
+      localStream = await navigator.mediaDevices.getUserMedia({video:true,audio:true});
       localVideo.srcObject = localStream;
       localLoading.style.display = 'none';
     }catch(err){
       localLoading.style.display = 'none';
-      console.error('Fresh stream error:', err);
+      console.error('Stream re-acquire error:', err);
     }
   }
-  
-  // Find new partner
+
+  // Notify server (server will tell old partner they were left, and find us a new one)
   socket.emit('next');
   status.textContent = 'Looking for someone new...';
   waitingMsg.style.display = 'block';
