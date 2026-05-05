@@ -241,7 +241,9 @@ function updateInterestChips(){const text=interestInput.value.trim(),chips=text?
 
 document.getElementById('modalAccept').onclick=async()=>{
   closeModal();
-  introScreen.style.display='none';chatScreen.classList.add('active');
+  introScreen.style.display='none';
+  chatScreen.style.display='block';
+  chatScreen.classList.add('active');
   updateInterestChips();
   if(currentMode==='video'){localLoading.style.display='flex';try{localStream=await navigator.mediaDevices.getUserMedia({video:true,audio:true});localVideo.srcObject=localStream;localLoading.style.display='none';videoWrapper.style.display='grid';}catch(e){localLoading.style.display='none';showToast('Camera denied','❌');return;}}else{videoWrapper.style.display='none';}
   status.textContent='Looking for someone...';document.getElementById('global-status').style.display='block';socket.emit('join',{mode:currentMode,interests:selectedInterests});showToast('🔍 Finding match...');
@@ -337,13 +339,21 @@ function stopChat(){
   pendingIceCandidates=[];
   if(connectionTimeout){clearTimeout(connectionTimeout);connectionTimeout=null;}
 
-  // 6. Go back to home screen
-  resetChat();
-  introScreen.style.display='block';
+  // 6. Go back to home screen — fully hide chat, show intro
   chatScreen.classList.remove('active');
+  chatScreen.style.display='none';
   document.getElementById('global-status').style.display='none';
   videoWrapper.style.display='none';
-  status.textContent='Looking for someone...';
+  chatMessages.innerHTML='';
+  messageInput.value='';
+  chatMessages.classList.remove('active');
+  inputArea.classList.remove('active');
+  waitingMsg.style.display='none';
+  isMuted=false;isCameraOff=false;
+  document.getElementById('mute-btn').classList.remove('muted');
+  document.getElementById('camera-btn').classList.remove('camera-off');
+  localVideo.style.display='block';
+  introScreen.style.display='flex';
 }
 
 async function nextChat(){
