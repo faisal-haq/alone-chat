@@ -78,30 +78,57 @@ function clearPartner(socket) {
   socket.sessionId = null;
 }
 
-function matchSockets(a, b) {
+function matchSockets(a, b, commonInterests = []) {
   const sessionId = `${a.id}-${b.id}-${Date.now()}`;
   a.partner   = b;
   b.partner   = a;
   a.sessionId = sessionId;
   b.sessionId = sessionId;
-  a.emit('matched', { partnerId: b.id, sessionId });
-  b.emit('matched', { partnerId: a.id, sessionId });
-  console.log(`Matched: ${a.id} <-> ${b.id}`);
+  a.emit('matched', { partnerId: b.id, sessionId, commonInterests });
+  b.emit('matched', { partnerId: a.id, sessionId, commonInterests });
+  console.log(`Matched: ${a.id} <-> ${b.id} | Common: [${commonInterests.join(', ')}]`);
+}
+
+function getCommonInterests(a, b) {
+  const aInterests = (a.interests || []).map(i => i.toLowerCase().trim());
+  const bInterests = (b.interests || []).map(i => i.toLowerCase().trim());
+  return aInterests.filter(i => i && bInterests.includes(i));
 }
 
 function findAndMatch(socket) {
   const mode = socket.mode || 'video';
   const waitingList = mode === 'video' ? waitingVideoUsers : waitingTextUsers;
-  const idx = waitingList.findIndex(s => s.id !== socket.id && !s.partner);
-  if (idx !== -1) {
-    const partner = waitingList.splice(idx, 1)[0];
-    matchSockets(socket, partner);
-  } else {
+  const candidates = waitingList.filter(s => s.id !== socket.id && !s.partner);
+
+  if (candidates.length === 0) {
     removeFromWaiting(socket);
     if (mode === 'video') waitingVideoUsers.push(socket);
     else                  waitingTextUsers.push(socket);
     socket.emit('waiting');
+    return;
   }
+
+  // Try to find a partner with at least one common interest
+  let bestMatch = null;
+  let bestCount = 0;
+
+  if ((socket.interests || []).length > 0) {
+    for (const candidate of candidates) {
+      const common = getCommonInterests(socket, candidate);
+      if (common.length > bestCount) {
+        bestCount = common.length;
+        bestMatch = candidate;
+      }
+    }
+  }
+
+  // Fall back to anyone if no interest match found
+  const partner = bestMatch || candidates[0];
+  const idx = waitingList.indexOf(partner);
+  if (idx !== -1) waitingList.splice(idx, 1);
+
+  const commonInterests = getCommonInterests(socket, partner);
+  matchSockets(socket, partner, commonInterests);
 }
 
 function isValidSignal(socket, targetId) {
@@ -130,7 +157,8 @@ io.on('connection', (socket) => {
 
   // ---- join ----
   socket.on('join', (data = {}) => {
-    socket.mode = data.mode || 'video';
+    socket.mode      = data.mode || 'video';
+    socket.interests = Array.isArray(data.interests) ? data.interests : [];
     if (socket.partner) {
       socket.partner.emit('partner-left');
       clearPartner(socket);

@@ -1,5 +1,6 @@
 {
-  "name": "alone-chat",
+  "name": "omefly",
+  "type": "commonjs",
   "version": "1.0.0",
   "description": "Random Stranger Video & Text Chat",
   "main": "server.js",

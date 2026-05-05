@@ -6,7 +6,7 @@
     <title>OmeFly - Talk to Strangers</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
-    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>💬</text></svg>">
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><defs><linearGradient id='g' x1='0%25' y1='0%25' x2='100%25' y2='100%25'><stop offset='0%25' stop-color='%236c63ff'/><stop offset='100%25' stop-color='%2343d9ad'/></linearGradient></defs><circle cx='50' cy='50' r='48' fill='url(%23g)'/><text x='50' y='62' font-size='52' text-anchor='middle' font-family='Arial' font-weight='900' fill='white'>OF</text></svg>">
     <style>
         /* UHMEGLE MODERN DARK THEME */
         *,*::before,*::after{box-sizing:border-box;margin:0;padding:0;}
@@ -90,7 +90,19 @@
 
 <!-- NAV -->
 <nav id="navbar">
-  <a href="#" class="nav-logo">Ome<span>Fly</span></a>
+  <a href="#" class="nav-logo" style="display:flex;align-items:center;gap:10px;text-decoration:none;">
+    <svg width="36" height="36" viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">
+      <defs>
+        <linearGradient id="logoGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+          <stop offset="0%" stop-color="#6c63ff"/>
+          <stop offset="100%" stop-color="#43d9ad"/>
+        </linearGradient>
+      </defs>
+      <circle cx="50" cy="50" r="48" fill="url(#logoGrad)"/>
+      <text x="50" y="63" font-size="50" text-anchor="middle" font-family="Arial,sans-serif" font-weight="900" fill="white">OF</text>
+    </svg>
+    <span style="font-size:1.5rem;font-weight:800;letter-spacing:-.03em;background:linear-gradient(135deg,#8b85ff,#43d9ad);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;">OmeFly</span>
+  </a>
   <div class="status-bar" id="status-bar">
     <span id="user-count">0</span> users online
   </div>
@@ -106,6 +118,22 @@
   <div class="hero-badge">
     <span class="dot"></span>
     <span id="online-badge">0</span> people online now
+  </div>
+  <div style="margin-bottom:24px;animation:fadeInDown .5s ease both;">
+    <svg width="80" height="80" viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">
+      <defs>
+        <linearGradient id="heroGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+          <stop offset="0%" stop-color="#6c63ff"/>
+          <stop offset="100%" stop-color="#43d9ad"/>
+        </linearGradient>
+        <filter id="glow">
+          <feGaussianBlur stdDeviation="3" result="blur"/>
+          <feComposite in="SourceGraphic" in2="blur" operator="over"/>
+        </filter>
+      </defs>
+      <circle cx="50" cy="50" r="48" fill="url(#heroGrad)" filter="url(#glow)" opacity="0.9"/>
+      <text x="50" y="63" font-size="50" text-anchor="middle" font-family="Arial,sans-serif" font-weight="900" fill="white">OF</text>
+    </svg>
   </div>
   <h1><span class="grad">Meet Strangers.</span><br>Real Connections.</h1>
   <p class="hero-sub">Anonymous video & text chat worldwide. No sign-up required.</p>
@@ -152,6 +180,9 @@
       <p>Wait while we connect you with someone new</p>
     </div>
 
+    <div id="common-interests-bar" style="display:none;padding:10px 20px;background:rgba(108,99,255,0.10);border-bottom:1px solid rgba(108,99,255,0.2);text-align:center;font-size:.88rem;font-weight:600;color:var(--primary-light);">
+      🎯 Common Interests: <span id="common-interests-list" style="font-weight:500;color:var(--text);"></span>
+    </div>
     <div class="chat-messages" id="chat-messages"><!-- Messages --></div>
 
     <div class="input-area" id="input-area">
@@ -269,6 +300,15 @@ socket.on('waiting',()=>{waitingMsg.style.display='block';chatMessages.classList
 socket.on('matched',async data=>{
   if(data.partnerId===socket.id){socket.emit('next');return;}
   partnerId=data.partnerId;waitingMsg.style.display='none';chatMessages.classList.add('active');inputArea.classList.add('active');setTimeout(()=>messageInput.focus(),100);const rb=document.getElementById('report-btn');rb.disabled=false;rb.textContent='🚩 Report';rb.style.opacity='1';status.textContent='Connected!';previewStatusEl.innerHTML='✅ Connected <span style="color:var(--accent2)">●</span>';showToast('Connected! 👋');
+  const ciBar=document.getElementById('common-interests-bar');
+  const ciList=document.getElementById('common-interests-list');
+  if(data.commonInterests&&data.commonInterests.length>0){
+    ciList.textContent=data.commonInterests.join('  •  ');
+    ciBar.style.display='block';
+  }else{
+    ciBar.style.display='none';
+    ciList.textContent='';
+  }
   if(connectionTimeout)clearTimeout(connectionTimeout);connectionTimeout=setTimeout(()=>{if(peerConnection&&peerConnection.iceConnectionState!=='connected'&&peerConnection.iceConnectionState!=='completed'){status.textContent='Timeout. Retrying...';socket.emit('next');}},30000);
   if(peerConnection){peerConnection.close();peerConnection=null;}
   hasRemoteOffer=false;pendingIceCandidates=[];
@@ -314,6 +354,7 @@ socket.on('partner-left',()=>{
   // 3. Reset signaling state
   partnerId=null;hasRemoteOffer=false;pendingIceCandidates=[];pendingAnswer=null;
   if(connectionTimeout){clearTimeout(connectionTimeout);connectionTimeout=null;}
+  document.getElementById('common-interests-bar').style.display='none';
   // 4. Update UI — show waiting, find new partner
   remoteLoading.style.display='flex';
   chatMessages.innerHTML='';messageInput.value='';
@@ -391,6 +432,7 @@ async function nextChat(){
   if(connectionTimeout)clearTimeout(connectionTimeout);
   chatMessages.innerHTML = '';
   messageInput.value = '';
+  document.getElementById('common-interests-bar').style.display='none';
 
   // If video mode but stream was lost for any reason, re-acquire it
   if(currentMode === 'video' && (!localStream || localStream.getTracks().every(t=>t.readyState==='ended'))){
