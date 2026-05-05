@@ -292,7 +292,19 @@ async function processPendingIceCandidates(){if(peerConnection&&peerConnection.r
 
 socket.on('message',data=>addMessage(data.text,'stranger'));
 
-socket.on('partner-left',()=>{if(peerConnection){peerConnection.close();peerConnection=null;}remoteVideo.srcObject=null;remoteLoading.style.display='flex';resetChat();status.textContent='Partner left. Finding new...';waitingMsg.style.display='block';chatMessages.classList.remove('active');inputArea.classList.remove('active');videoWrapper.style.display=currentMode==='video'?'grid':'none';socket.emit('join',{mode:currentMode,interests:selectedInterests});});
+socket.on('partner-left',()=>{
+  if(peerConnection){peerConnection.close();peerConnection=null;}
+  if(remoteVideo.srcObject){remoteVideo.srcObject.getTracks().forEach(t=>t.stop());remoteVideo.srcObject=null;}
+  remoteLoading.style.display='flex';
+  hasRemoteOffer=false;pendingIceCandidates=[];pendingAnswer=null;
+  resetChat();
+  status.textContent='Partner left. Finding new...';
+  waitingMsg.style.display='block';
+  chatMessages.classList.remove('active');
+  inputArea.classList.remove('active');
+  videoWrapper.style.display=currentMode==='video'?'grid':'none';
+  socket.emit('join',{mode:currentMode,interests:selectedInterests});
+});
 
 function sendMessage(){const text=messageInput.value.trim();if(text&&partnerId){socket.emit('message',{text});addMessage(text,'you');messageInput.value='';}}
 
@@ -302,7 +314,37 @@ function toggleMute(){isMuted=!isMuted;if(localStream)localStream.getAudioTracks
 
 function toggleCamera(){isCameraOff=!isCameraOff;if(localStream)localStream.getVideoTracks().forEach(t=>t.enabled=!isCameraOff);localVideo.style.display=isCameraOff?'none':'block';document.getElementById('camera-btn').classList.toggle('camera-off',isCameraOff);document.getElementById('camera-btn').title=isCameraOff?'Camera On':'Camera Off';}
 
-function stopChat(){if(localStream)localStream.getTracks().forEach(t=>t.stop());if(peerConnection)peerConnection.close();remoteVideo.srcObject=null;remoteLoading.style.display='none';if(partnerId)socket.emit('next');resetChat();introScreen.style.display='block';chatScreen.classList.remove('active');document.getElementById('global-status').style.display='none';videoWrapper.style.display='none';status.textContent='Looking for someone...';}
+function stopChat(){
+  // 1. Tell server to notify partner BEFORE clearing partnerId
+  if(partnerId) socket.emit('next');
+
+  // 2. Stop all local media tracks so mic/camera fully release
+  if(localStream){localStream.getTracks().forEach(t=>t.stop());localStream=null;}
+
+  // 3. Close and null the peer connection so no stale audio/video leaks
+  if(peerConnection){peerConnection.close();peerConnection=null;}
+
+  // 4. Clear both video elements
+  localVideo.srcObject=null;
+  remoteVideo.srcObject=null;
+  remoteLoading.style.display='none';
+  localLoading.style.display='none';
+
+  // 5. Reset all state
+  partnerId=null;
+  hasRemoteOffer=false;
+  pendingAnswer=null;
+  pendingIceCandidates=[];
+  if(connectionTimeout){clearTimeout(connectionTimeout);connectionTimeout=null;}
+
+  // 6. Go back to home screen
+  resetChat();
+  introScreen.style.display='block';
+  chatScreen.classList.remove('active');
+  document.getElementById('global-status').style.display='none';
+  videoWrapper.style.display='none';
+  status.textContent='Looking for someone...';
+}
 
 async function nextChat(){
   const oldPartnerId = partnerId;
