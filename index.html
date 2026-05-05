@@ -68,6 +68,8 @@
         .ctrl-btn{display:flex;align-items:center;justify-content:center;gap:6px;padding:12px 24px;border-radius:50px;font-size:.9rem;font-weight:600;cursor:pointer;border:none;transition:all .2s;}
         .ctrl-next{background:linear-gradient(135deg,var(--primary),var(--primary-dark));color:#fff;box-shadow:0 4px 15px rgba(108,99,255,0.35);}
         .ctrl-stop{background:rgba(255,101,132,0.12);color:var(--accent);border:1px solid rgba(255,101,132,0.25);padding:12px 20px;}
+        .ctrl-report{background:rgba(255,165,0,0.12);color:#ffaa00;border:1px solid rgba(255,165,0,0.3);padding:12px 20px;}
+        .ctrl-report:hover{background:rgba(255,165,0,0.25);}
         .ctrl-btn:hover{transform:translateY(-1px);}
         .ctrl-icon{width:44px;height:44px;border-radius:50%;background:var(--surface2);border:1px solid var(--border);display:flex;align-items:center;justify-content:center;cursor:pointer;transition:all .2s;color:var(--text-muted);font-size:1rem;}
         .ctrl-icon:hover{background:var(--primary);color:#fff;border-color:var(--primary);transform:translateY(-1px);}
@@ -162,6 +164,7 @@
       <div class="ctrl-icon" id="camera-btn" title="Camera">📷</div>
       <button class="ctrl-btn ctrl-stop" id="stop-btn">⏹ Stop</button>
       <button class="ctrl-btn ctrl-next" id="next-btn">⏭ Next</button>
+      <button class="ctrl-btn ctrl-report" id="report-btn" title="Report for nudity/inappropriate content">🚩 Report</button>
     </div>
   </div>
 </div>
@@ -183,6 +186,14 @@
 <div class="toast" id="toast">
   <span class="toast-icon" id="toastIcon">🔄</span>
   <span id="toastMsg">Loading...</span>
+</div>
+
+<!-- BANNED SCREEN -->
+<div id="banned-screen" style="display:none;position:fixed;inset:0;background:var(--bg);z-index:9999;display:none;align-items:center;justify-content:center;flex-direction:column;gap:24px;text-align:center;padding:40px;">
+  <div style="font-size:4rem;">🚫</div>
+  <h2 style="font-size:2rem;font-weight:800;background:linear-gradient(135deg,#ff5f57,#ff6584);-webkit-background-clip:text;-webkit-text-fill-color:transparent;">You Have Been Banned</h2>
+  <p style="color:var(--text-muted);max-width:420px;font-size:1rem;line-height:1.6;">Your IP address has been banned due to reports of inappropriate content (nudity, pornography, etc.).<br><br>This ban is permanent.</p>
+  <div style="background:var(--surface);border:1px solid var(--border);border-radius:16px;padding:20px 32px;color:var(--text-muted);font-size:.9rem;">🔒 Your IP has been blocked from AloneChat</div>
 </div>
 
 <script src="/socket.io/socket.io.js"></script>
@@ -220,6 +231,7 @@ document.getElementById('mute-btn').onclick = toggleMute;
 document.getElementById('camera-btn').onclick = toggleCamera;
 document.getElementById('next-btn').onclick = nextChat;
 document.getElementById('send-btn').onclick = sendMessage;
+document.getElementById('report-btn').onclick = reportUser;
 messageInput.addEventListener('keydown', e => { if(e.key==='Enter'){ e.preventDefault(); sendMessage(); } });
 interestInput.oninput = updateInterestChips;
 
@@ -256,7 +268,7 @@ socket.on('waiting',()=>{waitingMsg.style.display='block';chatMessages.classList
 
 socket.on('matched',async data=>{
   if(data.partnerId===socket.id){socket.emit('next');return;}
-  partnerId=data.partnerId;waitingMsg.style.display='none';chatMessages.classList.add('active');inputArea.classList.add('active');setTimeout(()=>messageInput.focus(),100);status.textContent='Connected!';previewStatusEl.innerHTML='✅ Connected <span style="color:var(--accent2)">●</span>';showToast('Connected! 👋');
+  partnerId=data.partnerId;waitingMsg.style.display='none';chatMessages.classList.add('active');inputArea.classList.add('active');setTimeout(()=>messageInput.focus(),100);const rb=document.getElementById('report-btn');rb.disabled=false;rb.textContent='🚩 Report';rb.style.opacity='1';status.textContent='Connected!';previewStatusEl.innerHTML='✅ Connected <span style="color:var(--accent2)">●</span>';showToast('Connected! 👋');
   if(connectionTimeout)clearTimeout(connectionTimeout);connectionTimeout=setTimeout(()=>{if(peerConnection&&peerConnection.iceConnectionState!=='connected'&&peerConnection.iceConnectionState!=='completed'){status.textContent='Timeout. Retrying...';socket.emit('next');}},30000);
   if(peerConnection){peerConnection.close();peerConnection=null;}
   hasRemoteOffer=false;pendingIceCandidates=[];
@@ -404,5 +416,50 @@ async function nextChat(){
 function resetChat(){partnerId=null;chatMessages.innerHTML='';messageInput.value='';hasRemoteOffer=false;pendingAnswer=null;if(connectionTimeout)clearTimeout(connectionTimeout);isMuted=false;document.getElementById('mute-btn').classList.remove('muted');isCameraOff=false;document.getElementById('camera-btn').classList.remove('camera-off');localVideo.style.display='block';}
 
 console.log('✅ AloneChat - Uhmegle UI + FULL WebRTC functionality!');
+
+function reportUser(){
+  if(!partnerId){showToast('No one to report','❌');return;}
+  const confirmed = confirm('🚩 Report this user for nudity/inappropriate content?\n\nIf confirmed, this user will be disconnected and may be banned.');
+  if(!confirmed) return;
+  socket.emit('report', {reportedId: partnerId});
+  document.getElementById('report-btn').disabled = true;
+  document.getElementById('report-btn').textContent = '✅ Reported';
+  document.getElementById('report-btn').style.opacity = '0.5';
+}
+
+socket.on('report-ack', (data) => {
+  showToast(data.message, '🚩');
+});
+
+socket.on('kicked', () => {
+  // Reported user — close peer connection, stop all media
+  if(peerConnection){peerConnection.close();peerConnection=null;}
+  if(localStream){localStream.getTracks().forEach(t=>t.stop());localStream=null;}
+  if(remoteVideo.srcObject){remoteVideo.srcObject.getTracks().forEach(t=>t.stop());remoteVideo.srcObject=null;}
+  localVideo.srcObject=null;
+  partnerId=null;hasRemoteOffer=false;pendingIceCandidates=[];
+  if(connectionTimeout){clearTimeout(connectionTimeout);connectionTimeout=null;}
+  // Show banned screen
+  introScreen.style.display='none';
+  chatScreen.style.display='none';
+  chatScreen.classList.remove('active');
+  document.getElementById('global-status').style.display='none';
+  document.getElementById('banned-screen').style.display='flex';
+});
+
+socket.on('banned', () => {
+  // Immediately stop everything
+  if(localStream){localStream.getTracks().forEach(t=>t.stop());localStream=null;}
+  if(peerConnection){peerConnection.close();peerConnection=null;}
+  localVideo.srcObject = null;
+  remoteVideo.srcObject = null;
+  // Hide everything, show ban screen
+  introScreen.style.display = 'none';
+  chatScreen.style.display = 'none';
+  chatScreen.classList.remove('active');
+  document.getElementById('global-status').style.display = 'none';
+  const bannedScreen = document.getElementById('banned-screen');
+  bannedScreen.style.display = 'flex';
+});
 </script>
 </html>

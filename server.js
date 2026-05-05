@@ -2,6 +2,7 @@ const express = require('express');
 const http = require('http');
 const socketIo = require('socket.io');
 const path = require('path');
+const fs = require('fs');
 
 const app = express();
 const server = http.createServer(app);
@@ -12,56 +13,90 @@ const io = socketIo(server, {
 
 app.use(express.static(path.join(__dirname)));
 
+// --- IP Ban System ---
+const BAN_FILE = path.join(__dirname, 'banned_ips.json');
+
+function loadBannedIPs() {
+  try {
+    if (fs.existsSync(BAN_FILE)) {
+      const data = JSON.parse(fs.readFileSync(BAN_FILE, 'utf8'));
+      return new Set(data);
+    }
+  } catch(e) { console.error('Error loading bans:', e); }
+  return new Set();
+}
+
+function saveBannedIPs() {
+  try {
+    fs.writeFileSync(BAN_FILE, JSON.stringify([...bannedIPs]), 'utf8');
+  } catch(e) { console.error('Error saving bans:', e); }
+}
+
+let bannedIPs = loadBannedIPs();
+
+function getClientIP(socket) {
+  const forwarded = socket.handshake.headers['x-forwarded-for'];
+  if (forwarded) return forwarded.split(',')[0].trim();
+  return socket.handshake.address;
+}
+
+function banIP(ip) {
+  bannedIPs.add(ip);
+  saveBannedIPs();
+  console.log(`Banned IP: ${ip} | Total bans: ${bannedIPs.size}`);
+  // Kick all sockets with this IP
+  io.sockets.sockets.forEach(s => {
+    if (getClientIP(s) === ip) {
+      s.emit('banned');
+      s.disconnect(true);
+    }
+  });
+}
+
 // --- State ---
-let waitingVideoUsers = []; // sockets waiting for a video partner
-let waitingTextUsers  = []; // sockets waiting for a text partner
+let waitingVideoUsers = [];
+let waitingTextUsers  = [];
 let onlineCount = 0;
+// Track report counts: ip -> { count, reporters: Set of reporter socket ids }
+let reportCounts = new Map();
+const REPORTS_TO_BAN = 5; // number of reports needed to ban
 
 function broadcastUserCount() {
   io.emit('user-count', { count: onlineCount });
 }
 
-// Remove a socket from both waiting lists (safety helper)
 function removeFromWaiting(socket) {
   waitingVideoUsers = waitingVideoUsers.filter(s => s.id !== socket.id);
   waitingTextUsers  = waitingTextUsers.filter(s => s.id !== socket.id);
 }
 
-// Cleanly dissolve partnership for ONE side only, without triggering the other
 function clearPartner(socket) {
   if (socket.partner) {
     socket.partner.partner = null;
     socket.partner = null;
   }
-  // Also clear the session token so stale WebRTC signals are dropped
   socket.sessionId = null;
 }
 
-// Match two sockets and assign a shared sessionId so signals can be validated
 function matchSockets(a, b) {
   const sessionId = `${a.id}-${b.id}-${Date.now()}`;
   a.partner   = b;
   b.partner   = a;
   a.sessionId = sessionId;
   b.sessionId = sessionId;
-
   a.emit('matched', { partnerId: b.id, sessionId });
   b.emit('matched', { partnerId: a.id, sessionId });
-  console.log(`Matched: ${a.id} <-> ${b.id}  session:${sessionId}`);
+  console.log(`Matched: ${a.id} <-> ${b.id}`);
 }
 
 function findAndMatch(socket) {
   const mode = socket.mode || 'video';
   const waitingList = mode === 'video' ? waitingVideoUsers : waitingTextUsers;
-
-  // Pick first waiting socket that is NOT this socket and has NO partner already
   const idx = waitingList.findIndex(s => s.id !== socket.id && !s.partner);
-
   if (idx !== -1) {
-    const partner = waitingList.splice(idx, 1)[0]; // remove from waiting
+    const partner = waitingList.splice(idx, 1)[0];
     matchSockets(socket, partner);
   } else {
-    // Make sure we're not already in the list before pushing
     removeFromWaiting(socket);
     if (mode === 'video') waitingVideoUsers.push(socket);
     else                  waitingTextUsers.push(socket);
@@ -69,54 +104,53 @@ function findAndMatch(socket) {
   }
 }
 
-// Validate that an incoming signal belongs to the current session
 function isValidSignal(socket, targetId) {
-  return (
-    socket.partner &&
-    socket.partner.id === targetId
-  );
+  return socket.partner && socket.partner.id === targetId;
 }
 
 // ---- Socket handlers ----
 io.on('connection', (socket) => {
-  onlineCount++;
-  broadcastUserCount();
-  console.log('Connected:', socket.id, '| Online:', onlineCount);
+  const clientIP = getClientIP(socket);
 
+  // Check ban on connect
+  if (bannedIPs.has(clientIP)) {
+    socket.emit('banned');
+    socket.disconnect(true);
+    return;
+  }
+
+  socket.clientIP  = clientIP;
   socket.partner   = null;
   socket.sessionId = null;
   socket.mode      = 'video';
 
+  onlineCount++;
+  broadcastUserCount();
+  console.log('Connected:', socket.id, 'IP:', clientIP, '| Online:', onlineCount);
+
   // ---- join ----
   socket.on('join', (data = {}) => {
     socket.mode = data.mode || 'video';
-
-    // Clean up any previous partnership
     if (socket.partner) {
       socket.partner.emit('partner-left');
       clearPartner(socket);
     }
     removeFromWaiting(socket);
-
     findAndMatch(socket);
   });
 
   // ---- next ----
   socket.on('next', () => {
-    // Notify OLD partner they were left — but only if they are still paired with US
     if (socket.partner && socket.partner.partner && socket.partner.partner.id === socket.id) {
       socket.partner.emit('partner-left');
     }
     clearPartner(socket);
     removeFromWaiting(socket);
-
     findAndMatch(socket);
   });
 
-
-  // ---- stop — fully disconnect, do NOT re-queue ----
+  // ---- stop ----
   socket.on('stop', () => {
-    // Notify partner they were left
     if (socket.partner && socket.partner.partner && socket.partner.partner.id === socket.id) {
       socket.partner.emit('partner-left');
       socket.partner.partner   = null;
@@ -124,10 +158,60 @@ io.on('connection', (socket) => {
     }
     clearPartner(socket);
     removeFromWaiting(socket);
-    // Do NOT call findAndMatch — user chose to fully stop
   });
 
-  // ---- WebRTC signaling — all validated against current partner + session ----
+  // ---- REPORT ----
+  socket.on('report', (data) => {
+    const reportedId = data.reportedId;
+
+    // Must have a current partner and it must match reportedId
+    if (!reportedId || !socket.partner || socket.partner.id !== reportedId) {
+      socket.emit('report-ack', { message: 'No active user to report.' });
+      return;
+    }
+
+    const reportedSocket = socket.partner;
+    const reportedIP = reportedSocket.clientIP;
+    const reporterIP = socket.clientIP;
+
+    if (!reportedIP) return;
+
+    // Step 1: Always disconnect reported user from chat immediately
+    // Save reference before clearPartner nulls it
+    const reporterSocket = socket;
+    if (reportedSocket.partner) {
+      reportedSocket.emit('kicked');   // tell reported user they were kicked
+      clearPartner(reportedSocket);
+      clearPartner(reporterSocket);
+      removeFromWaiting(reportedSocket);
+      removeFromWaiting(reporterSocket);
+      // Reporter goes back to finding new partner
+      reporterSocket.emit('report-ack', { message: 'User reported and disconnected.' });
+      findAndMatch(reporterSocket);
+    }
+
+    // Step 2: Track report count (use socket ID as key to support local testing)
+    // Use reportedSocket.id as unique key so same-IP local testing still works
+    const trackKey = reportedSocket.id;
+    if (!reportCounts.has(trackKey)) {
+      reportCounts.set(trackKey, { count: 0, reporters: new Set(), ip: reportedIP });
+    }
+    const record = reportCounts.get(trackKey);
+
+    if (!record.reporters.has(reporterSocket.id)) {
+      record.reporters.add(reporterSocket.id);
+      record.count++;
+    }
+    console.log(`Report against ${trackKey} (IP:${reportedIP}): ${record.count}/${REPORTS_TO_BAN}`);
+
+    // Step 3: Ban IP if threshold reached
+    if (record.count >= REPORTS_TO_BAN) {
+      reportCounts.delete(trackKey);
+      banIP(reportedIP);
+    }
+  });
+
+  // ---- WebRTC signaling ----
   socket.on('offer', (data) => {
     if (!isValidSignal(socket, data.targetId)) return;
     socket.partner.emit('offer', { sdp: data.sdp, senderId: socket.id });
@@ -153,14 +237,11 @@ io.on('connection', (socket) => {
     onlineCount = Math.max(0, onlineCount - 1);
     broadcastUserCount();
     console.log('Disconnected:', socket.id, '| Online:', onlineCount);
-
-    // Notify partner but only if they're still paired with this socket
     if (socket.partner && socket.partner.partner && socket.partner.partner.id === socket.id) {
       socket.partner.emit('partner-left');
       socket.partner.partner   = null;
       socket.partner.sessionId = null;
     }
-
     removeFromWaiting(socket);
   });
 });
