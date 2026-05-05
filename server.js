@@ -113,6 +113,20 @@ io.on('connection', (socket) => {
     findAndMatch(socket);
   });
 
+
+  // ---- stop — fully disconnect, do NOT re-queue ----
+  socket.on('stop', () => {
+    // Notify partner they were left
+    if (socket.partner && socket.partner.partner && socket.partner.partner.id === socket.id) {
+      socket.partner.emit('partner-left');
+      socket.partner.partner   = null;
+      socket.partner.sessionId = null;
+    }
+    clearPartner(socket);
+    removeFromWaiting(socket);
+    // Do NOT call findAndMatch — user chose to fully stop
+  });
+
   // ---- WebRTC signaling — all validated against current partner + session ----
   socket.on('offer', (data) => {
     if (!isValidSignal(socket, data.targetId)) return;

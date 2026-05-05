@@ -295,16 +295,23 @@ async function processPendingIceCandidates(){if(peerConnection&&peerConnection.r
 socket.on('message',data=>addMessage(data.text,'stranger'));
 
 socket.on('partner-left',()=>{
+  // 1. Close peer connection immediately — stops all audio/video
   if(peerConnection){peerConnection.close();peerConnection=null;}
+  // 2. Stop and clear remote stream tracks
   if(remoteVideo.srcObject){remoteVideo.srcObject.getTracks().forEach(t=>t.stop());remoteVideo.srcObject=null;}
+  // 3. Reset signaling state
+  partnerId=null;hasRemoteOffer=false;pendingIceCandidates=[];pendingAnswer=null;
+  if(connectionTimeout){clearTimeout(connectionTimeout);connectionTimeout=null;}
+  // 4. Update UI — show waiting, find new partner
   remoteLoading.style.display='flex';
-  hasRemoteOffer=false;pendingIceCandidates=[];pendingAnswer=null;
-  resetChat();
-  status.textContent='Partner left. Finding new...';
-  waitingMsg.style.display='block';
+  chatMessages.innerHTML='';messageInput.value='';
   chatMessages.classList.remove('active');
   inputArea.classList.remove('active');
+  waitingMsg.style.display='block';
+  previewStatusEl.textContent='Waiting...';
+  status.textContent='Partner left. Finding new...';
   videoWrapper.style.display=currentMode==='video'?'grid':'none';
+  // 5. Rejoin queue for new partner
   socket.emit('join',{mode:currentMode,interests:selectedInterests});
 });
 
@@ -317,8 +324,8 @@ function toggleMute(){isMuted=!isMuted;if(localStream)localStream.getAudioTracks
 function toggleCamera(){isCameraOff=!isCameraOff;if(localStream)localStream.getVideoTracks().forEach(t=>t.enabled=!isCameraOff);localVideo.style.display=isCameraOff?'none':'block';document.getElementById('camera-btn').classList.toggle('camera-off',isCameraOff);document.getElementById('camera-btn').title=isCameraOff?'Camera On':'Camera Off';}
 
 function stopChat(){
-  // 1. Tell server to notify partner BEFORE clearing partnerId
-  if(partnerId) socket.emit('next');
+  // 1. Tell server to fully disconnect (not re-queue)
+  socket.emit('stop');
 
   // 2. Stop all local media tracks so mic/camera fully release
   if(localStream){localStream.getTracks().forEach(t=>t.stop());localStream=null;}
