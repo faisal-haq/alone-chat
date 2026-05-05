@@ -61,7 +61,7 @@
         .message-stranger{background:var(--surface2);color:var(--text);justify-self:start;}
         .input-area{display:none;gap:12px;padding:16px;background:var(--bg3);border:1px solid var(--border);border-radius:var(--radius);flex-wrap:wrap;}
         .input-area.active{display:flex;}
-        .input-area input{flex:1;padding:14px 18px;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-sm);color:var(--text);font-size:.95rem;min-width:250px;}
+        .input-area input{flex:1;padding:14px 18px;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-sm);color:var(--text);font-size:.95rem;min-width:250px;font-family:inherit;outline:none;pointer-events:auto;user-select:text;-webkit-user-select:text;cursor:text;}
         .input-area input::placeholder{color:var(--text-muted);}
         .input-area button{padding:14px 24px;background:linear-gradient(135deg,var(--primary),var(--primary-dark));color:#fff;border:none;border-radius:var(--radius-sm);font-weight:600;cursor:pointer;transition:all .2s;}
         .preview-controls{display:flex;align-items:center;justify-content:center;gap:12px;padding:16px 24px;background:var(--bg3);border-top:1px solid var(--border);}
@@ -220,7 +220,7 @@ document.getElementById('mute-btn').onclick = toggleMute;
 document.getElementById('camera-btn').onclick = toggleCamera;
 document.getElementById('next-btn').onclick = nextChat;
 document.getElementById('send-btn').onclick = sendMessage;
-messageInput.onkeypress = e => e.key==='Enter' && sendMessage();
+messageInput.addEventListener('keydown', e => { if(e.key==='Enter'){ e.preventDefault(); sendMessage(); } });
 interestInput.oninput = updateInterestChips;
 
 function openModal(mode) {
@@ -256,7 +256,7 @@ socket.on('waiting',()=>{waitingMsg.style.display='block';chatMessages.classList
 
 socket.on('matched',async data=>{
   if(data.partnerId===socket.id){socket.emit('next');return;}
-  partnerId=data.partnerId;waitingMsg.style.display='none';chatMessages.classList.add('active');inputArea.classList.add('active');status.textContent='Connected!';previewStatusEl.innerHTML='✅ Connected <span style="color:var(--accent2)">●</span>';showToast('Connected! 👋');
+  partnerId=data.partnerId;waitingMsg.style.display='none';chatMessages.classList.add('active');inputArea.classList.add('active');setTimeout(()=>messageInput.focus(),100);status.textContent='Connected!';previewStatusEl.innerHTML='✅ Connected <span style="color:var(--accent2)">●</span>';showToast('Connected! 👋');
   if(connectionTimeout)clearTimeout(connectionTimeout);connectionTimeout=setTimeout(()=>{if(peerConnection&&peerConnection.iceConnectionState!=='connected'&&peerConnection.iceConnectionState!=='completed'){status.textContent='Timeout. Retrying...';socket.emit('next');}},30000);
   if(peerConnection){peerConnection.close();peerConnection=null;}
   hasRemoteOffer=false;pendingIceCandidates=[];
