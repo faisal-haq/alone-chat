@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>AloneChat - Talk to Strangers</title>
+    <title>OmeFly - Talk to Strangers</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
     <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>💬</text></svg>">
@@ -90,7 +90,7 @@
 
 <!-- NAV -->
 <nav id="navbar">
-  <a href="#" class="nav-logo">Alone<span>Chat</span></a>
+  <a href="#" class="nav-logo">Ome<span>Fly</span></a>
   <div class="status-bar" id="status-bar">
     <span id="user-count">0</span> users online
   </div>
@@ -193,7 +193,7 @@
   <div style="font-size:4rem;">🚫</div>
   <h2 style="font-size:2rem;font-weight:800;background:linear-gradient(135deg,#ff5f57,#ff6584);-webkit-background-clip:text;-webkit-text-fill-color:transparent;">You Have Been Banned</h2>
   <p style="color:var(--text-muted);max-width:420px;font-size:1rem;line-height:1.6;">Your IP address has been banned due to reports of inappropriate content (nudity, pornography, etc.).<br><br>This ban is permanent.</p>
-  <div style="background:var(--surface);border:1px solid var(--border);border-radius:16px;padding:20px 32px;color:var(--text-muted);font-size:.9rem;">🔒 Your IP has been blocked from AloneChat</div>
+  <div style="background:var(--surface);border:1px solid var(--border);border-radius:16px;padding:20px 32px;color:var(--text-muted);font-size:.9rem;">🔒 Your IP has been blocked from OmeFly</div>
 </div>
 
 <script src="/socket.io/socket.io.js"></script>
@@ -415,7 +415,7 @@ async function nextChat(){
 
 function resetChat(){partnerId=null;chatMessages.innerHTML='';messageInput.value='';hasRemoteOffer=false;pendingAnswer=null;if(connectionTimeout)clearTimeout(connectionTimeout);isMuted=false;document.getElementById('mute-btn').classList.remove('muted');isCameraOff=false;document.getElementById('camera-btn').classList.remove('camera-off');localVideo.style.display='block';}
 
-console.log('✅ AloneChat - Uhmegle UI + FULL WebRTC functionality!');
+console.log('✅ OmeFly - Uhmegle UI + FULL WebRTC functionality!');
 
 function reportUser(){
   if(!partnerId){showToast('No one to report','❌');return;}
