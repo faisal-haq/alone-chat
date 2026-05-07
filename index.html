@@ -83,7 +83,7 @@
         @keyframes fadeInDown{from{opacity:0;transform:translateY(-16px);}to{opacity:1;transform:translateY(0);}}
         @keyframes fadeInUp{from{opacity:0;transform:translateY(20px);}to{opacity:1;transform:translateY(0);}}
         @keyframes fadeIn{from{opacity:0;}to{opacity:1;}}
-        @media (max-width:768px){nav{padding:0 20px;}.preview-body{grid-template-columns:1fr;height:auto;}.preview-video:first-child{border-bottom:1px solid var(--border);}.hero-actions{flex-direction:column;width:100%;}.btn-primary,.btn-secondary{width:100%;justify-content:center;}.chat-messages{grid-template-columns:1fr;}}
+        @media (max-width:768px){nav{padding:0 20px;}.preview-body{grid-template-columns:1fr;height:auto;}.preview-video:first-child{border-bottom:1px solid var(--border);}.hero-actions{flex-direction:column;width:100%;}.btn-primary,.btn-secondary{width:100%;justify-content:center;}.chat-messages{grid-template-columns:1fr;}#group-video-wrapper{grid-template-columns:1fr!important;height:auto!important;}}
     </style>
 </head>
 <body>
@@ -150,6 +150,7 @@
   <div class="hero-actions">
     <button class="btn-primary" id="btn-video">📹 Start Video Chat</button>
     <button class="btn-secondary" id="btn-text">💬 Text Chat</button>
+    <button class="btn-secondary" id="btn-friend" style="background:rgba(67,217,173,0.12);border-color:rgba(67,217,173,0.35);color:#43d9ad;">👥 Chat with Friend</button>
   </div>
 </section>
 
@@ -196,6 +197,98 @@
       <button class="ctrl-btn ctrl-stop" id="stop-btn">⏹ Stop</button>
       <button class="ctrl-btn ctrl-next" id="next-btn">⏭ Next</button>
       <button class="ctrl-btn ctrl-report" id="report-btn" title="Report for nudity/inappropriate content">🚩 Report</button>
+    </div>
+  </div>
+</div>
+
+<!-- FRIEND ROOM MODAL -->
+<div class="modal-overlay" id="friendModalOverlay" style="display:none;">
+  <div class="modal" style="max-width:520px;" onclick="event.stopPropagation()">
+    <div style="font-size:2.5rem;margin-bottom:12px;">👥</div>
+    <h2 style="margin-bottom:8px;">Chat with a Friend</h2>
+    <p style="color:var(--text-muted);font-size:.95rem;margin-bottom:28px;">Both of you connect on your own devices, then together you'll be matched with a stranger for a 3-way video call.</p>
+
+    <!-- Step 1: Choose create or join -->
+    <div id="friend-step-1">
+      <div style="display:flex;gap:12px;justify-content:center;flex-wrap:wrap;margin-bottom:16px;">
+        <button class="btn-primary" id="btn-create-room" style="padding:14px 28px;gap:8px;">✨ Create Room</button>
+        <button class="btn-secondary" id="btn-join-room-toggle" style="padding:14px 28px;gap:8px;">🔑 Join Room</button>
+      </div>
+      <div id="join-room-input-area" style="display:none;margin-top:12px;">
+        <input type="text" id="room-code-input" maxlength="6" placeholder="Enter 6-letter room code" style="width:100%;padding:14px 18px;background:var(--surface);border:1px solid var(--border);border-radius:12px;color:var(--text);font-size:1.1rem;font-family:inherit;outline:none;text-align:center;letter-spacing:.15em;text-transform:uppercase;margin-bottom:10px;">
+        <button class="btn-primary" id="btn-join-room" style="width:100%;padding:14px;">Join Room →</button>
+      </div>
+    </div>
+
+    <!-- Step 2: Room created — share code -->
+    <div id="friend-step-2" style="display:none;">
+      <p style="color:var(--text-muted);font-size:.9rem;margin-bottom:12px;">Share this code with your friend:</p>
+      <div id="room-code-display" style="font-size:2.4rem;font-weight:900;letter-spacing:.2em;background:linear-gradient(135deg,var(--primary-light),var(--accent2));-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;margin-bottom:12px;cursor:pointer;" title="Click to copy"></div>
+      <p style="color:var(--text-dim);font-size:.82rem;margin-bottom:20px;" id="room-member-status">⏳ Waiting for friend to join...</p>
+      <button class="btn-secondary" id="btn-copy-code" style="margin-bottom:10px;width:100%;padding:12px;">📋 Copy Code</button>
+      <div id="btn-start-group-wrap" style="display:none;">
+        <button class="btn-primary" id="btn-start-group" style="width:100%;padding:14px;">🚀 Find Stranger Together!</button>
+      </div>
+    </div>
+
+    <!-- Step 3: Joined room — waiting -->
+    <div id="friend-step-3" style="display:none;">
+      <div id="friend-joined-code" style="font-size:2rem;font-weight:900;letter-spacing:.18em;background:linear-gradient(135deg,var(--primary-light),var(--accent2));-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;margin-bottom:12px;"></div>
+      <p style="color:var(--accent2);font-size:.95rem;font-weight:600;margin-bottom:8px;">✅ You joined the room!</p>
+      <p style="color:var(--text-muted);font-size:.9rem;" id="room-joined-status">⏳ Waiting for room leader to start...</p>
+    </div>
+
+    <div id="friend-modal-error" style="display:none;margin-top:12px;padding:10px 16px;background:rgba(255,101,132,0.12);border:1px solid rgba(255,101,132,0.3);border-radius:10px;color:var(--accent);font-size:.88rem;"></div>
+    <button class="btn-secondary" onclick="closeFriendModal()" style="margin-top:16px;width:100%;padding:12px;">Cancel</button>
+  </div>
+</div>
+
+<!-- GROUP CHAT SCREEN -->
+<div class="chat-container" id="group-chat-screen" style="display:none;">
+  <div class="preview-card">
+    <div class="preview-header">
+      <div class="preview-dots"><span></span><span></span><span></span></div>
+      <div class="preview-title">👥 Group Chat — You + Friend + Stranger</div>
+      <div class="preview-status" id="group-preview-status">Connecting...</div>
+    </div>
+
+    <div id="group-video-wrapper" style="display:none;grid-template-columns:1fr 1fr 1fr;gap:0;height:350px;">
+      <div class="preview-video">
+        <video id="group-local-video" autoplay muted playsinline class="video-box"></video>
+        <div class="video-label">You</div>
+        <div class="video-loading" id="group-local-loading">Loading camera...</div>
+      </div>
+      <div class="preview-video" style="border-left:1px solid var(--border);">
+        <video id="group-friend-video" autoplay playsinline class="video-box"></video>
+        <div class="video-label">Your Friend</div>
+        <div class="video-loading" id="group-friend-loading">Connecting...</div>
+      </div>
+      <div class="preview-video" style="border-left:1px solid var(--border);">
+        <video id="group-stranger-video" autoplay playsinline class="video-box"></video>
+        <div class="video-label">Stranger</div>
+        <div class="video-loading" id="group-stranger-loading">Finding stranger...</div>
+      </div>
+    </div>
+
+    <div class="waiting-message" id="group-waiting-msg" style="display:block;">
+      <h2>🔍 Finding a stranger for your group...</h2>
+      <p>Hang on while we connect you + your friend with someone</p>
+    </div>
+
+    <div id="group-common-interests-bar" style="display:none;padding:10px 20px;background:rgba(108,99,255,0.10);border-bottom:1px solid rgba(108,99,255,0.2);text-align:center;font-size:.88rem;font-weight:600;color:var(--primary-light);">🎯 Common Interests: <span id="group-common-interests-list" style="font-weight:500;color:var(--text);"></span></div>
+
+    <div class="chat-messages active" id="group-chat-messages" style="display:block;max-height:220px;overflow-y:auto;padding:16px;background:var(--bg3);border-radius:0;border:none;border-top:1px solid var(--border);"></div>
+
+    <div class="input-area active" id="group-input-area" style="display:flex;">
+      <input type="text" id="group-message-input" placeholder="Type to everyone...">
+      <button id="group-send-btn">Send</button>
+    </div>
+
+    <div class="preview-controls">
+      <div class="ctrl-icon" id="group-mute-btn" title="Mic">🎤</div>
+      <div class="ctrl-icon" id="group-camera-btn" title="Camera">📷</div>
+      <button class="ctrl-btn ctrl-stop" id="group-stop-btn">⏹ Stop</button>
+      <button class="ctrl-btn ctrl-next" id="group-next-btn">⏭ Find New Stranger</button>
     </div>
   </div>
 </div>
@@ -282,24 +375,46 @@ function showToast(msg,icon='🔄'){const toast = document.getElementById('toast
 
 function updateInterestChips(){const text=interestInput.value.trim(),chips=text?text.split(',').map(t=>t.trim()).filter(t=>t):[];interestChips.innerHTML=chips.map(c=>`<span class="interest-chip">${c}</span>`).join('');selectedInterests=chips;}
 
+function showSoloVideoBoxes() {
+  if (currentMode !== 'video') {
+    videoWrapper.style.display = 'none';
+    return;
+  }
+  videoWrapper.style.display = 'grid';
+  videoWrapper.style.gridTemplateColumns = '';
+}
+
 document.getElementById('modalAccept').onclick=async()=>{
   closeModal();
   introScreen.style.display='none';
   chatScreen.style.display='block';
   chatScreen.classList.add('active');
   updateInterestChips();
-  if(currentMode==='video'){localLoading.style.display='flex';try{localStream=await navigator.mediaDevices.getUserMedia({video:true,audio:true});localVideo.srcObject=localStream;localLoading.style.display='none';videoWrapper.style.display='grid';}catch(e){localLoading.style.display='none';showToast('Camera denied','❌');return;}}else{videoWrapper.style.display='none';}
+  showSoloVideoBoxes();
+  if(currentMode==='video'){localLoading.textContent='Loading camera...';localLoading.style.display='flex';try{localStream=await navigator.mediaDevices.getUserMedia({video:true,audio:true});localVideo.srcObject=localStream;localLoading.style.display='none';showSoloVideoBoxes();}catch(e){localLoading.textContent='Camera unavailable';showToast('Camera unavailable. Connecting receive-only.','❌');}}else{videoWrapper.style.display='none';}
   status.textContent='Looking for someone...';document.getElementById('global-status').style.display='block';socket.emit('join',{mode:currentMode,interests:selectedInterests});showToast('🔍 Finding match...');
 };
 
 // FULL ORIGINAL SOCKET HANDLERS + WEBRTC (complete from backup)
 socket.on('user-count',(data)=>{userCountEl.textContent=data.count;document.getElementById('online-badge').textContent=data.count;});
 
-socket.on('waiting',()=>{waitingMsg.style.display='block';chatMessages.classList.remove('active');inputArea.classList.remove('active');status.textContent='Looking for stranger...';previewStatusEl.textContent='Waiting...';remoteLoading.style.display='flex';});
+socket.on('waiting',()=>{if(groupChatScreen&&groupChatScreen.style.display==='block')return;showSoloVideoBoxes();waitingMsg.style.display='block';chatMessages.classList.remove('active');inputArea.classList.remove('active');status.textContent='Looking for stranger...';previewStatusEl.textContent='Waiting...';remoteLoading.style.display='flex';});
 
 socket.on('matched',async data=>{
   if(data.partnerId===socket.id){socket.emit('next');return;}
-  partnerId=data.partnerId;waitingMsg.style.display='none';chatMessages.classList.add('active');inputArea.classList.add('active');setTimeout(()=>messageInput.focus(),100);const rb=document.getElementById('report-btn');rb.disabled=false;rb.textContent='🚩 Report';rb.style.opacity='1';status.textContent='Connected!';previewStatusEl.innerHTML='✅ Connected <span style="color:var(--accent2)">●</span>';showToast('Connected! 👋');
+  if (groupChatScreen.style.display === 'block') {
+    Object.values(groupPCs).forEach(e => { try { e.pc.close(); } catch(e){} });
+    groupPCs = {}; groupSlotMap = {}; groupIsOfferer = {}; groupPendingIce = {}; groupRemoteStreams = {};
+    if (groupLocalStream && groupLocalStream.getTracks().some(t => t.readyState === 'live')) {
+      localStream = groupLocalStream; localVideo.srcObject = localStream; localLoading.style.display = 'none';
+    }
+    groupLocalStream = null; _streamPromise = null;
+    groupLocalVideo.srcObject = null; groupFriendVideo.srcObject = null; groupStrangerVideo.srcObject = null;
+    groupChatScreen.style.display = 'none';
+    chatScreen.style.display = 'block'; chatScreen.classList.add('active');
+    document.getElementById('global-status').style.display = 'block';
+  }
+  partnerId=data.partnerId;showSoloVideoBoxes();waitingMsg.style.display='none';chatMessages.classList.add('active');inputArea.classList.add('active');setTimeout(()=>messageInput.focus(),100);const rb=document.getElementById('report-btn');rb.disabled=false;rb.textContent='🚩 Report';rb.style.opacity='1';status.textContent='Connected!';previewStatusEl.innerHTML='✅ Connected <span style="color:var(--accent2)">●</span>';showToast('Connected! 👋');
   const ciBar=document.getElementById('common-interests-bar');
   const ciList=document.getElementById('common-interests-list');
   if(data.commonInterests&&data.commonInterests.length>0){
@@ -309,38 +424,46 @@ socket.on('matched',async data=>{
     ciBar.style.display='none';
     ciList.textContent='';
   }
+  if(currentMode==='text'){
+    if(peerConnection){peerConnection.close();peerConnection=null;}
+    remoteLoading.style.display='none';
+    return;
+  }
   if(connectionTimeout)clearTimeout(connectionTimeout);connectionTimeout=setTimeout(()=>{if(peerConnection&&peerConnection.iceConnectionState!=='connected'&&peerConnection.iceConnectionState!=='completed'){status.textContent='Timeout. Retrying...';socket.emit('next');}},30000);
-  if(peerConnection){peerConnection.close();peerConnection=null;}
-  hasRemoteOffer=false;pendingIceCandidates=[];
-  peerConnection=new RTCPeerConnection(iceServers,{bundlePolicy:'max-compat',sdpSemantics:'unified-plan'});
+  const hasEarlyOffer = peerConnection && peerConnection.remoteDescription && peerConnection.remoteDescription.type === 'offer';
+  if(peerConnection && !hasEarlyOffer){peerConnection.close();peerConnection=null;}
+  if(!hasEarlyOffer){hasRemoteOffer=false;pendingIceCandidates=[];}
+  if(!peerConnection) peerConnection=createSoloPeerConnection();
   // Always add current localStream tracks to the new peer connection
-  if(localStream&&localStream.getTracks().length>0){localStream.getTracks().forEach(track=>peerConnection.addTrack(track,localStream));}
-  peerConnection.ontrack=e=>{console.log('Remote track:',e.track.kind);if(e.track.kind==='video')remoteLoading.style.display='none';if(e.streams&&e.streams[0])remoteVideo.srcObject=e.streams[0];else{let s=remoteVideo.srcObject||new MediaStream();s.addTrack(e.track);remoteVideo.srcObject=s;}remoteVideo.play().catch(console.error);};
-  peerConnection.onicecandidate=e=>{if(e.candidate)socket.emit('ice-candidate',{candidate:e.candidate,targetId:partnerId});};
-  peerConnection.oniceconnectionstatechange=()=>{console.log('ICE:',peerConnection.iceConnectionState);if(['connected','completed'].includes(peerConnection.iceConnectionState)){clearTimeout(connectionTimeout);connectionTimeout=null;}};
+  if(localStream&&localStream.getTracks().length>0){
+    const senderTracks = peerConnection.getSenders().map(s => s.track && s.track.id);
+    localStream.getTracks().forEach(track=>{if(!senderTracks.includes(track.id))peerConnection.addTrack(track,localStream);});
+  }
   remoteLoading.style.display='flex';
-  const isOfferer=socket.id<partnerId;if(isOfferer){const offer=await peerConnection.createOffer({offerToReceiveAudio:1,offerToReceiveVideo:1});await peerConnection.setLocalDescription(offer);socket.emit('offer',{sdp:offer.sdp,targetId:partnerId});}else console.log('Waiting for offer...');
+  if(data.isOfferer&&!hasEarlyOffer&&peerConnection.signalingState==='stable'){const offer=await peerConnection.createOffer({offerToReceiveAudio:1,offerToReceiveVideo:1});await peerConnection.setLocalDescription(offer);socket.emit('offer',{sdp:offer.sdp,targetId:partnerId});}else console.log('Waiting for offer...');
 });
 
+function createSoloPeerConnection(){
+  const pc=new RTCPeerConnection({...iceServers,bundlePolicy:'max-compat',sdpSemantics:'unified-plan'});
+  pc.ontrack=e=>{console.log('Remote track:',e.track.kind);if(e.track.kind==='video')remoteLoading.style.display='none';if(e.streams&&e.streams[0])remoteVideo.srcObject=e.streams[0];else{let s=remoteVideo.srcObject||new MediaStream();s.addTrack(e.track);remoteVideo.srcObject=s;}remoteVideo.play().catch(console.error);};
+  pc.onicecandidate=e=>{if(e.candidate&&partnerId)socket.emit('ice-candidate',{candidate:e.candidate,targetId:partnerId});};
+  pc.oniceconnectionstatechange=()=>{console.log('ICE:',pc.iceConnectionState);if(['connected','completed'].includes(pc.iceConnectionState)){clearTimeout(connectionTimeout);connectionTimeout=null;}};
+  return pc;
+}
+
 socket.on('offer',async data=>{
+  if(currentMode!=='video')return;
+  if(!partnerId) partnerId=data.senderId;
   if(!peerConnection){
-    peerConnection=new RTCPeerConnection(iceServers,{bundlePolicy:'max-compat',sdpSemantics:'unified-plan'});
+    peerConnection=createSoloPeerConnection();
     if(localStream)localStream.getTracks().forEach(t=>peerConnection.addTrack(t,localStream));
-    peerConnection.ontrack=e=>{
-      console.log('Remote track (offer path):',e.track.kind);
-      if(e.track.kind==='video')remoteLoading.style.display='none';
-      if(e.streams&&e.streams[0])remoteVideo.srcObject=e.streams[0];
-      else{let s=remoteVideo.srcObject||new MediaStream();s.addTrack(e.track);remoteVideo.srcObject=s;}
-      remoteVideo.play().catch(console.error);
-    };
-    peerConnection.onicecandidate=e=>{if(e.candidate)socket.emit('ice-candidate',{candidate:e.candidate,targetId:partnerId});};
   }
   const desc=new RTCSessionDescription({type:'offer',sdp:data.sdp});await peerConnection.setRemoteDescription(desc);hasRemoteOffer=true;processPendingIceCandidates();const answer=await peerConnection.createAnswer();await peerConnection.setLocalDescription(answer);socket.emit('answer',{sdp:answer.sdp,targetId:data.senderId});
 });
 
-socket.on('answer',async data=>{if(peerConnection&&['have-local-offer','have-remote-offer'].includes(peerConnection.signalingState)){const desc=new RTCSessionDescription({type:'answer',sdp:data.sdp});await peerConnection.setRemoteDescription(desc);processPendingIceCandidates();}});
+socket.on('answer',async data=>{if(currentMode!=='video')return;if(peerConnection&&['have-local-offer','have-remote-offer'].includes(peerConnection.signalingState)){const desc=new RTCSessionDescription({type:'answer',sdp:data.sdp});await peerConnection.setRemoteDescription(desc);processPendingIceCandidates();}});
 
-socket.on('ice-candidate',async data=>{if(peerConnection&&peerConnection.remoteDescription){try{await peerConnection.addIceCandidate(new RTCIceCandidate(data.candidate));}catch(e){console.error('ICE error:',e);}}else pendingIceCandidates.push(data.candidate);});
+socket.on('ice-candidate',async data=>{if(currentMode!=='video')return;if(peerConnection&&peerConnection.remoteDescription){try{await peerConnection.addIceCandidate(new RTCIceCandidate(data.candidate));}catch(e){console.error('ICE error:',e);}}else pendingIceCandidates.push(data.candidate);});
 
 async function processPendingIceCandidates(){if(peerConnection&&peerConnection.remoteDescription&&pendingIceCandidates.length){const cands=[...pendingIceCandidates];pendingIceCandidates=[];for(const candidate of cands)try{await peerConnection.addIceCandidate(new RTCIceCandidate(candidate));}catch(e){console.error(e);}}}
 
@@ -363,7 +486,7 @@ socket.on('partner-left',()=>{
   waitingMsg.style.display='block';
   previewStatusEl.textContent='Waiting...';
   status.textContent='Partner left. Finding new...';
-  videoWrapper.style.display=currentMode==='video'?'grid':'none';
+  showSoloVideoBoxes();
   // 5. Rejoin queue for new partner
   socket.emit('join',{mode:currentMode,interests:selectedInterests});
 });
@@ -450,6 +573,7 @@ async function nextChat(){
   // Notify server (server will tell old partner they were left, and find us a new one)
   socket.emit('next');
   status.textContent = 'Looking for someone new...';
+  showSoloVideoBoxes();
   waitingMsg.style.display = 'block';
   chatMessages.classList.remove('active');
   inputArea.classList.remove('active');
@@ -457,7 +581,608 @@ async function nextChat(){
 
 function resetChat(){partnerId=null;chatMessages.innerHTML='';messageInput.value='';hasRemoteOffer=false;pendingAnswer=null;if(connectionTimeout)clearTimeout(connectionTimeout);isMuted=false;document.getElementById('mute-btn').classList.remove('muted');isCameraOff=false;document.getElementById('camera-btn').classList.remove('camera-off');localVideo.style.display='block';}
 
-console.log('✅ OmeFly - Uhmegle UI + FULL WebRTC functionality!');
+document.getElementById('btn-friend').onclick = () => openFriendModal();
+
+// ============================================================
+// FRIEND ROOM + GROUP CHAT SYSTEM
+// ============================================================
+let groupLocalStream = null;
+let groupPCs = {};          // peerId -> { pc, slot }
+let groupSlotMap = {};      // peerId -> slot index (0 or 1)
+let groupIsOfferer = {};    // peerId -> bool
+let groupPendingIce = {};   // peerId -> [candidate, ...]
+let groupRemoteStreams = {}; // peerId -> MediaStream
+let groupMuted = false, groupCameraOff = false;
+let _streamPromise = null;  // single shared promise so concurrent callers wait on same getUserMedia
+let currentGroupRole = null;
+
+const groupChatScreen    = document.getElementById('group-chat-screen');
+const groupLocalVideo    = document.getElementById('group-local-video');
+const groupFriendVideo   = document.getElementById('group-friend-video');
+const groupStrangerVideo = document.getElementById('group-stranger-video');
+const groupFriendLoading = document.getElementById('group-friend-loading');
+const groupStrangerLoading = document.getElementById('group-stranger-loading');
+const groupLocalLoading  = document.getElementById('group-local-loading');
+const groupWaitingMsg    = document.getElementById('group-waiting-msg');
+const groupChatMessages  = document.getElementById('group-chat-messages');
+const groupMessageInput  = document.getElementById('group-message-input');
+const groupVideoWrapper  = document.getElementById('group-video-wrapper');
+const groupPreviewStatus = document.getElementById('group-preview-status');
+
+document.getElementById('group-stop-btn').onclick   = stopGroupChat;
+document.getElementById('group-next-btn').onclick   = nextGroupChat;
+document.getElementById('group-send-btn').onclick   = sendGroupMessage;
+document.getElementById('group-mute-btn').onclick   = toggleGroupMute;
+document.getElementById('group-camera-btn').onclick = toggleGroupCamera;
+groupMessageInput.addEventListener('keydown', e => { if(e.key==='Enter'){e.preventDefault();sendGroupMessage();} });
+
+function showGroupVideoBoxes() {
+  groupVideoWrapper.style.display = 'grid';
+  groupVideoWrapper.style.gridTemplateColumns = '1fr 1fr 1fr';
+}
+
+function getGroupSlotElements(slot) {
+  return {
+    videoEl: slot === 0 ? groupFriendVideo : groupStrangerVideo,
+    loadEl: slot === 0 ? groupFriendLoading : groupStrangerLoading
+  };
+}
+
+function groupSlotHasLiveStream(slot) {
+  const { videoEl } = getGroupSlotElements(slot);
+  const stream = videoEl.srcObject;
+  return !!(stream && stream.getTracks().some(t => t.readyState === 'live'));
+}
+
+function attachGroupRemoteStream(peerId, stream, hasVideoTrack = true) {
+  const entry = groupPCs[peerId];
+  const slot = groupSlotMap[peerId] !== undefined ? groupSlotMap[peerId] : (entry ? entry.slot : 0);
+  const otherSlot = slot === 0 ? 1 : 0;
+  const { videoEl, loadEl } = getGroupSlotElements(slot);
+  const other = getGroupSlotElements(otherSlot).videoEl;
+
+  if (other.srcObject === stream) other.srcObject = null;
+  videoEl.autoplay = true;
+  videoEl.muted = false;
+  videoEl.playsInline = true;
+  videoEl.srcObject = stream;
+  if (hasVideoTrack) loadEl.style.display = 'none';
+  videoEl.play().catch(() => {});
+}
+
+function closeGroupPeer(peerId) {
+  const entry = groupPCs[peerId];
+  if (!entry) return;
+  try { entry.pc.close(); } catch(e) {}
+  const { videoEl, loadEl } = getGroupSlotElements(entry.slot);
+  if (videoEl.srcObject === groupRemoteStreams[peerId]) videoEl.srcObject = null;
+  loadEl.style.display = 'flex';
+  loadEl.textContent = entry.slot === 0 ? 'Connecting friend...' : 'Finding stranger...';
+  delete groupPCs[peerId];
+  delete groupSlotMap[peerId];
+  delete groupIsOfferer[peerId];
+  delete groupPendingIce[peerId];
+  delete groupRemoteStreams[peerId];
+}
+
+function closeGroupPeersBySlot(slot) {
+  Object.keys(groupPCs).forEach(peerId => {
+    if (groupPCs[peerId] && groupPCs[peerId].slot === slot) closeGroupPeer(peerId);
+  });
+}
+
+function addLocalTracksToGroupPC(pc, stream) {
+  if (!stream) return;
+  const senderTracks = pc.getSenders().map(s => s.track && s.track.id);
+  stream.getTracks().forEach(t => {
+    if (!senderTracks.includes(t.id)) pc.addTrack(t, stream);
+  });
+}
+
+function ensureGroupReceiveTransceivers(pc) {
+  const kinds = pc.getTransceivers().map(t => t.receiver && t.receiver.track && t.receiver.track.kind);
+  if (!kinds.includes('video')) pc.addTransceiver('video', { direction: 'recvonly' });
+  if (!kinds.includes('audio')) pc.addTransceiver('audio', { direction: 'recvonly' });
+}
+
+function ensureGroupPC(peerId, slot) {
+  if (groupPCs[peerId]) {
+    groupPCs[peerId].slot = slot;
+    return groupPCs[peerId].pc;
+  }
+
+  const pc = new RTCPeerConnection(iceServers);
+  groupPCs[peerId] = { pc, slot };
+
+  pc.ontrack = (e) => {
+    if (!groupRemoteStreams[peerId]) groupRemoteStreams[peerId] = new MediaStream();
+    const remoteStream = groupRemoteStreams[peerId];
+    if (!remoteStream.getTracks().some(t => t.id === e.track.id)) {
+      remoteStream.addTrack(e.track);
+    }
+    attachGroupRemoteStream(peerId, remoteStream, remoteStream.getVideoTracks().length > 0);
+  };
+
+  pc.onicecandidate = (e) => {
+    if (e.candidate) socket.emit('group-ice', { candidate: e.candidate, targetId: peerId });
+  };
+
+  pc.onconnectionstatechange = () => {
+    const activeSlot = groupSlotMap[peerId] !== undefined ? groupSlotMap[peerId] : groupPCs[peerId].slot;
+    const { loadEl } = getGroupSlotElements(activeSlot);
+    if (pc.connectionState === 'connected') {
+      loadEl.textContent = 'Waiting for video...';
+    } else if (['failed','disconnected','closed'].includes(pc.connectionState)) {
+      loadEl.style.display = 'flex';
+      loadEl.textContent = 'Connection failed';
+    }
+  };
+
+  return pc;
+}
+
+async function startGroupPeer(peer, stream) {
+  groupSlotMap[peer.id] = peer.slot;
+  groupIsOfferer[peer.id] = peer.isOfferer;
+  groupPendingIce[peer.id] = groupPendingIce[peer.id] || [];
+
+  const pc = ensureGroupPC(peer.id, peer.slot);
+  addLocalTracksToGroupPC(pc, stream);
+  ensureGroupReceiveTransceivers(pc);
+
+  if (groupRemoteStreams[peer.id]) {
+    attachGroupRemoteStream(peer.id, groupRemoteStreams[peer.id], groupRemoteStreams[peer.id].getVideoTracks().length > 0);
+  }
+
+  if (peer.isOfferer && pc.signalingState === 'stable' && !pc.localDescription && !pc.remoteDescription) {
+    const offer = await pc.createOffer({ offerToReceiveAudio: true, offerToReceiveVideo: true });
+    await pc.setLocalDescription(offer);
+    socket.emit('group-offer', { sdp: pc.localDescription.sdp, targetId: peer.id });
+  }
+}
+
+// ---- Modal helpers ----
+function openFriendModal() {
+  document.getElementById('friendModalOverlay').style.display='flex';
+  document.getElementById('friendModalOverlay').classList.add('open');
+  showFriendStep(1);
+}
+function closeFriendModal() {
+  document.getElementById('friendModalOverlay').classList.remove('open');
+  document.getElementById('friendModalOverlay').style.display='none';
+}
+function showFriendStep(n) {
+  [1,2,3].forEach(i => document.getElementById(`friend-step-${i}`).style.display = i===n?'block':'none');
+  document.getElementById('friend-modal-error').style.display='none';
+}
+function showFriendError(msg) {
+  const el = document.getElementById('friend-modal-error');
+  el.textContent = msg; el.style.display='block';
+}
+
+// ---- Button handlers ----
+document.getElementById('btn-create-room').onclick = () => {
+  socket.emit('create-friend-room', { mode: 'video', interests: selectedInterests });
+};
+document.getElementById('btn-join-room-toggle').onclick = () => {
+  const area = document.getElementById('join-room-input-area');
+  area.style.display = area.style.display==='none' ? 'block' : 'none';
+};
+document.getElementById('btn-join-room').onclick = () => {
+  const code = document.getElementById('room-code-input').value.toUpperCase().trim();
+  if (code.length !== 6) { showFriendError('Enter a valid 6-character code.'); return; }
+  socket.emit('join-friend-room', { code, interests: selectedInterests });
+};
+document.getElementById('btn-copy-code').onclick = () => {
+  const code = document.getElementById('room-code-display').textContent;
+  navigator.clipboard.writeText(code).then(() => showToast('Code copied!','📋'));
+};
+document.getElementById('btn-start-group').onclick = () => {
+  socket.emit('start-group-chat');
+};
+
+// ---- Room server events ----
+socket.on('room-created', (data) => {
+  document.getElementById('room-code-display').textContent = data.code;
+  document.getElementById('room-member-status').textContent = '⏳ Waiting for friend to join...';
+  document.getElementById('btn-start-group-wrap').style.display = 'none';
+  showFriendStep(2);
+});
+socket.on('room-joined', (data) => {
+  document.getElementById('friend-joined-code').textContent = data.code;
+  document.getElementById('room-joined-status').textContent = '⏳ Waiting for room leader to start...';
+  showFriendStep(3);
+});
+socket.on('room-member-update', (data) => {
+  if (data.membersCount >= 2) {
+    document.getElementById('room-member-status').textContent = '✅ Friend joined! You can start now.';
+    document.getElementById('btn-start-group-wrap').style.display = 'block';
+    document.getElementById('room-joined-status').textContent = '✅ Room full! Waiting for leader to start...';
+  } else {
+    document.getElementById('room-member-status').textContent = '⏳ Waiting for friend to join...';
+  }
+});
+socket.on('room-ready', () => {});
+socket.on('room-error', (data) => { showFriendError(data.message); });
+socket.on('room-expired', () => { showFriendError('Room expired. Please create a new one.'); showFriendStep(1); });
+
+// group-searching: all room members switch to group screen and start camera
+socket.on('group-searching', async () => {
+  closeFriendModal();
+  _showGroupScreen();
+  groupWaitingMsg.style.display = 'block';
+  groupWaitingMsg.querySelector('h2').textContent = 'Finding a stranger for your group...';
+  groupWaitingMsg.querySelector('p').textContent = 'Hang on while we connect you + your friend with someone';
+  showGroupVideoBoxes();
+  if (!groupSlotHasLiveStream(0)) {
+    groupFriendLoading.style.display = 'flex';
+    groupFriendLoading.textContent = 'Connecting friend...';
+  }
+  groupStrangerLoading.style.display = 'flex';
+  groupStrangerLoading.textContent = 'Finding stranger...';
+  status.textContent = 'Finding stranger for your group...';
+  groupPreviewStatus.textContent = 'Searching...';
+  await _getStream();  // get camera NOW, before match arrives
+});
+
+socket.on('friend-preview-ready', async (data) => {
+  closeFriendModal();
+  _showGroupScreen();
+  showGroupVideoBoxes();
+  groupWaitingMsg.style.display = 'block';
+  groupStrangerLoading.style.display = 'flex';
+  groupStrangerLoading.textContent = 'Finding stranger...';
+  status.textContent = 'Finding stranger for your group...';
+  groupPreviewStatus.textContent = 'Connecting friend...';
+
+  const stream = await _getStreamForGroupConnection();
+  const peer = data.peer;
+
+  // If friend stream is already live (slot 0), do NOT touch it — just keep slot map in sync.
+  // Calling startGroupPeer or closeGroupPeersBySlot(0) causes unnecessary renegotiation → blink.
+  if (groupSlotHasLiveStream(0)) {
+    groupSlotMap[peer.id] = peer.slot;
+    groupIsOfferer[peer.id] = peer.isOfferer;
+    return;
+  }
+
+  // Friend stream gone — close stale PC so a fresh offer can be made
+  closeGroupPeersBySlot(0);
+  groupFriendLoading.style.display = 'flex';
+  groupFriendLoading.textContent = 'Connecting friend...';
+  await startGroupPeer(peer, stream);
+});
+
+// ---- Stream acquisition (race-safe) ----
+async function _getStream() {
+  // Already have a live stream
+  if (groupLocalStream && groupLocalStream.getTracks().some(t => t.readyState === 'live')) return groupLocalStream;
+  if (localStream && localStream.getTracks().some(t => t.readyState === 'live')) {
+    groupLocalStream = localStream;
+    groupLocalVideo.srcObject = groupLocalStream;
+    groupLocalLoading.style.display = 'none';
+    return groupLocalStream;
+  }
+  // Already acquiring — wait on same promise
+  if (_streamPromise) return _streamPromise;
+  _streamPromise = (async () => {
+    groupLocalLoading.style.display = 'flex';
+    try {
+      groupLocalStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
+      groupLocalVideo.srcObject = groupLocalStream;
+      groupLocalLoading.style.display = 'none';
+    } catch(e) {
+      groupLocalLoading.style.display = 'none';
+      showToast('Camera/mic access denied ❌', '❌');
+    }
+    _streamPromise = null;
+    return groupLocalStream;
+  })();
+  return _streamPromise;
+}
+
+async function _getStreamForGroupConnection() {
+  const timeout = new Promise(resolve => setTimeout(() => resolve(null), 3000));
+  return Promise.race([_getStream(), timeout]);
+}
+
+function _showGroupScreen() {
+  introScreen.style.display = 'none';
+  chatScreen.style.display = 'none';
+  groupChatScreen.style.display = 'block';
+  document.getElementById('global-status').style.display = 'block';
+}
+
+// ---- group-matched: main entry point ----
+socket.on('group-matched', async (data) => {
+  // data.peers = [{id, slot, isOfferer}, ...]
+  // data.role = 'friend' | 'stranger'
+  currentGroupRole = data.role;
+
+  // 1. Show screen immediately
+  closeFriendModal();
+  _showGroupScreen();
+
+  // 2. Wait for camera (may already be done from group-searching)
+  const stream = await _getStreamForGroupConnection();
+
+  // 3. Reset stale peer connections, but keep any connection created by an early offer.
+  const currentPeerIds = data.peers.map(p => p.id);
+  Object.keys(groupPCs).forEach(peerId => {
+    if (!currentPeerIds.includes(peerId)) {
+      try { groupPCs[peerId].pc.close(); } catch(e){}
+      delete groupPCs[peerId];
+    }
+  });
+  groupSlotMap = {}; groupIsOfferer = {};
+
+  // 4. Update UI
+  groupWaitingMsg.style.display = 'none';
+  showGroupVideoBoxes();
+  groupPreviewStatus.innerHTML = '✅ Connected <span style="color:var(--accent2)">●</span>';
+  status.textContent = 'Group chat connected!';
+  showToast('Group connected! 👋', '👥');
+
+  // Update video labels
+  const labels = groupVideoWrapper.querySelectorAll('.video-label');
+  if (data.role === 'stranger') {
+    if (labels[1]) labels[1].textContent = 'Stranger 1';
+    if (labels[2]) labels[2].textContent = 'Stranger 2';
+  } else {
+    if (labels[1]) labels[1].textContent = 'Friend';
+    if (labels[2]) labels[2].textContent = 'Stranger';
+  }
+  // Only show loading spinner for slots that don't already have a live stream.
+  // NEVER flash groupFriendLoading if friend video is still playing — that causes the blink.
+  if (!groupSlotHasLiveStream(0)) {
+    groupFriendLoading.style.display = 'flex';
+    groupFriendLoading.textContent = 'Connecting...';
+  }
+  groupStrangerLoading.style.display = groupSlotHasLiveStream(1) ? 'none' : 'flex';
+  groupStrangerLoading.textContent = 'Connecting...';
+
+  // Common interests
+  const ciBar = document.getElementById('group-common-interests-bar');
+  const ciList = document.getElementById('group-common-interests-list');
+  if (data.commonInterests && data.commonInterests.length > 0) {
+    ciList.textContent = data.commonInterests.join(' • ');
+    ciBar.style.display = 'block';
+  } else { ciBar.style.display = 'none'; }
+
+  // 5. Create peer connections using explicit server-assigned slots.
+  // Skip slot 0 (friend) entirely if the stream is already live — no need to
+  // renegotiate and doing so would cause the friend video to blink.
+  for (const peer of data.peers) {
+    if (peer.slot === 0 && groupSlotHasLiveStream(0)) {
+      // Friend connection still alive — just update the slot map, don't renegotiate
+      groupSlotMap[peer.id] = peer.slot;
+      groupIsOfferer[peer.id] = peer.isOfferer;
+      continue;
+    }
+    await startGroupPeer(peer, stream);
+  }
+});
+
+// ---- group-offer (we are the answerer) ----
+socket.on('group-offer', async (data) => {
+  const peerId = data.senderId;
+
+  // Make sure screen is up and camera is ready
+  _showGroupScreen();
+  const stream = await _getStreamForGroupConnection();
+
+  // Use the server-provided slot when this offer arrives before group-matched.
+  const slot = (groupSlotMap[peerId] !== undefined) ? groupSlotMap[peerId] : (data.receiverSlot ?? 0);
+  groupSlotMap[peerId] = slot;
+
+  const pc = ensureGroupPC(peerId, slot);
+
+  // Add tracks (idempotent — check senders first)
+  addLocalTracksToGroupPC(pc, stream);
+
+  if (pc.signalingState !== 'stable') {
+    await Promise.all([
+      pc.setLocalDescription({ type: 'rollback' }).catch(() => {}),
+      pc.setRemoteDescription({ type: 'offer', sdp: data.sdp })
+    ]);
+  } else {
+    await pc.setRemoteDescription({ type: 'offer', sdp: data.sdp });
+  }
+
+  // Flush buffered ICE
+  for (const c of (groupPendingIce[peerId] || [])) {
+    try { await pc.addIceCandidate(c); } catch(e) {}
+  }
+  groupPendingIce[peerId] = [];
+
+  const answer = await pc.createAnswer();
+  await pc.setLocalDescription(answer);
+  socket.emit('group-answer', { sdp: pc.localDescription.sdp, targetId: peerId });
+
+  // Show video grid if hidden
+  groupWaitingMsg.style.display = 'none';
+  showGroupVideoBoxes();
+});
+
+// ---- group-answer ----
+socket.on('group-answer', async (data) => {
+  const entry = groupPCs[data.senderId];
+  if (!entry) return;
+  const { pc } = entry;
+  if (pc.signalingState === 'have-local-offer') {
+    await pc.setRemoteDescription({ type: 'answer', sdp: data.sdp });
+    // Flush buffered ICE
+    for (const c of (groupPendingIce[data.senderId] || [])) {
+      try { await pc.addIceCandidate(c); } catch(e) {}
+    }
+    groupPendingIce[data.senderId] = [];
+  }
+});
+
+// ---- group-ice ----
+socket.on('group-ice', async (data) => {
+  if (groupSlotMap[data.senderId] === undefined && data.receiverSlot !== undefined) {
+    groupSlotMap[data.senderId] = data.receiverSlot;
+  }
+  const entry = groupPCs[data.senderId];
+  const candidate = new RTCIceCandidate(data.candidate);
+  if (entry && entry.pc.remoteDescription) {
+    try { await entry.pc.addIceCandidate(candidate); } catch(e) {}
+  } else {
+    // Buffer it — remote description not set yet
+    if (!groupPendingIce[data.senderId]) groupPendingIce[data.senderId] = [];
+    groupPendingIce[data.senderId].push(candidate);
+  }
+});
+
+socket.on('waiting', () => {
+  if (groupChatScreen.style.display === 'block') {
+    groupWaitingMsg.style.display = 'block';
+    showGroupVideoBoxes();
+    status.textContent = 'Finding stranger for your group...';
+    groupPreviewStatus.textContent = 'Waiting...';
+  } else if (chatScreen.style.display === 'block' || chatScreen.classList.contains('active')) {
+    showSoloVideoBoxes();
+    waitingMsg.style.display = 'block';
+    chatMessages.classList.remove('active');
+    inputArea.classList.remove('active');
+    status.textContent = 'Looking for stranger...';
+    previewStatusEl.textContent = 'Waiting...';
+    remoteLoading.style.display = 'flex';
+  }
+});
+
+socket.on('group-message', (data) => {
+  const label = data.role === 'stranger' ? 'Stranger' : 'Friend';
+  addGroupMessage(data.text, label);
+});
+
+socket.on('group-partner-left', (data) => {
+  showToast('Someone left the group', '👋');
+  // Only close the specific peer that left. If the stranger left, only close slot 1.
+  // Do NOT close the friend PC (slot 0) — it's still connected and working.
+  closeGroupPeer(data.senderId);
+  groupPreviewStatus.textContent = 'Finding new stranger...';
+  if (groupChatScreen.style.display === 'block') {
+    groupWaitingMsg.style.display = 'block';
+    groupStrangerVideo.srcObject = null;
+    groupStrangerLoading.style.display = 'flex';
+    groupStrangerLoading.textContent = 'Finding new stranger...';
+    document.getElementById('group-common-interests-bar').style.display = 'none';
+    // Clear only stranger slot state — friend slot stays intact (no blink)
+    const strangerPeerId = data.senderId;
+    delete groupPCs[strangerPeerId];
+    delete groupSlotMap[strangerPeerId];
+    delete groupIsOfferer[strangerPeerId];
+    delete groupPendingIce[strangerPeerId];
+    delete groupRemoteStreams[strangerPeerId];
+  }
+});
+
+// ---- Group chat helpers ----
+function sendGroupMessage() {
+  const text = groupMessageInput.value.trim();
+  if (!text) return;
+  socket.emit('group-message', { text });
+  addGroupMessage(text, 'You');
+  groupMessageInput.value = '';
+}
+
+function addGroupMessage(text, sender) {
+  const div = document.createElement('div');
+  div.style.cssText = 'padding:8px 12px;margin:4px 0;border-radius:10px;font-size:.9rem;';
+  const colors = { You: 'var(--primary)', Friend: 'var(--accent2)', Stranger: 'var(--accent)' };
+  div.innerHTML = `<span style="font-weight:700;color:${colors[sender]||'var(--text-muted)'};">${sender}:</span> ${escHtml(text)}`;
+  groupChatMessages.appendChild(div);
+  groupChatMessages.scrollTop = groupChatMessages.scrollHeight;
+}
+
+function escHtml(t) { return t.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+
+function toggleGroupMute() {
+  groupMuted = !groupMuted;
+  if (groupLocalStream) groupLocalStream.getAudioTracks().forEach(t => t.enabled = !groupMuted);
+  document.getElementById('group-mute-btn').classList.toggle('muted', groupMuted);
+}
+function toggleGroupCamera() {
+  groupCameraOff = !groupCameraOff;
+  if (groupLocalStream) groupLocalStream.getVideoTracks().forEach(t => t.enabled = !groupCameraOff);
+  groupLocalVideo.style.display = groupCameraOff ? 'none' : 'block';
+  document.getElementById('group-camera-btn').classList.toggle('camera-off', groupCameraOff);
+}
+
+function stopGroupChat() {
+  Object.values(groupPCs).forEach(e => { try { e.pc.close(); } catch(e){} });
+  groupPCs = {}; groupSlotMap = {}; groupIsOfferer = {}; groupPendingIce = {};
+  groupRemoteStreams = {}; currentGroupRole = null;
+  if (groupLocalStream) { groupLocalStream.getTracks().forEach(t => t.stop()); groupLocalStream = null; }
+  if (localStream) { localStream.getTracks().forEach(t => t.stop()); localStream = null; }
+  _streamPromise = null;
+  groupLocalVideo.srcObject = null; groupFriendVideo.srcObject = null; groupStrangerVideo.srcObject = null; localVideo.srcObject = null;
+  if (peerConnection) { peerConnection.close(); peerConnection = null; }
+  partnerId = null; hasRemoteOffer = false; pendingIceCandidates = []; pendingAnswer = null;
+  socket.emit('stop');
+  groupChatScreen.style.display = 'none'; chatScreen.style.display = 'none'; chatScreen.classList.remove('active');
+  document.getElementById('global-status').style.display = 'none';
+  introScreen.style.display = 'flex';
+}
+
+function nextGroupChat() {
+  const wasStranger = currentGroupRole === 'stranger';
+
+  if (wasStranger) {
+    // Stranger: close ALL PCs, clear everything, switch to solo screen
+    Object.values(groupPCs).forEach(e => { try { e.pc.close(); } catch(e){} });
+    groupPCs = {}; groupSlotMap = {}; groupIsOfferer = {}; groupPendingIce = {};
+    groupRemoteStreams = {}; currentGroupRole = null;
+    groupFriendVideo.srcObject = null; groupStrangerVideo.srcObject = null;
+    groupChatMessages.innerHTML = '';
+    document.getElementById('group-common-interests-bar').style.display = 'none';
+
+    if (groupLocalStream && groupLocalStream.getTracks().some(t => t.readyState === 'live')) {
+      localStream = groupLocalStream; localVideo.srcObject = localStream;
+    }
+    groupLocalStream = null; _streamPromise = null; groupLocalVideo.srcObject = null;
+    groupChatScreen.style.display = 'none';
+    chatScreen.style.display = 'block'; chatScreen.classList.add('active');
+    document.getElementById('global-status').style.display = 'block';
+    showSoloVideoBoxes(); waitingMsg.style.display = 'block';
+    chatMessages.classList.remove('active'); inputArea.classList.remove('active');
+    remoteVideo.srcObject = null; remoteLoading.style.display = 'flex';
+    previewStatusEl.textContent = 'Waiting...'; status.textContent = 'Finding new stranger...';
+    if (peerConnection) { peerConnection.close(); peerConnection = null; }
+    partnerId = null; hasRemoteOffer = false; pendingIceCandidates = []; pendingAnswer = null;
+  } else {
+    // Friend: ONLY close the stranger PC (slot 1). Keep friend PC (slot 0) alive — no blink.
+    closeGroupPeersBySlot(1);
+    groupStrangerVideo.srcObject = null;
+    // Remove only slot-1 entries from state maps; slot-0 (friend) stays untouched
+    Object.keys(groupPCs).forEach(pid => {
+      if (groupPCs[pid] && groupPCs[pid].slot === 1) {
+        delete groupPCs[pid];
+        delete groupSlotMap[pid];
+        delete groupIsOfferer[pid];
+        delete groupPendingIce[pid];
+        delete groupRemoteStreams[pid];
+      }
+    });
+    currentGroupRole = null;
+    groupChatMessages.innerHTML = '';
+    document.getElementById('group-common-interests-bar').style.display = 'none';
+
+    // Show waiting UI for stranger slot only; friend slot stays live (no blink)
+    groupStrangerLoading.style.display = 'flex';
+    groupStrangerLoading.textContent = 'Finding stranger...';
+    groupWaitingMsg.style.display = 'block';
+    showGroupVideoBoxes();
+    groupPreviewStatus.textContent = 'Waiting...';
+    status.textContent = 'Finding new stranger...';
+  }
+
+  socket.emit('group-next');
+}
+
+console.log('✅ OmeFly loaded.');
 
 function reportUser(){
   if(!partnerId){showToast('No one to report','❌');return;}
