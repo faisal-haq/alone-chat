@@ -75,25 +75,38 @@ function generateRoomCode() {
   return code;
 }
 
-// Country lookup via ipapi.co (free, no key needed, works on servers, 1000 req/day)
+// Country lookup via ip-api.com HTTP (works from servers, 45 req/min free, no key needed)
 function lookupCountry(ip, cb) {
   // Skip lookup for local/private IPs
   if (!ip || ip === '::1' || ip.startsWith('127.') || ip.startsWith('192.168.') || ip.startsWith('10.') || ip === '::ffff:127.0.0.1') {
     return cb({ country: 'Local', countryCode: 'UN' });
   }
   const cleanIP = ip.replace('::ffff:', '');
-  const req = https.get(`https://ipapi.co/${cleanIP}/json/`, (res) => {
+  // ip-api.com HTTP (not HTTPS) works freely from server IPs with no key
+  const options = {
+    hostname: 'ip-api.com',
+    path: `/json/${cleanIP}?fields=status,country,countryCode`,
+    method: 'GET',
+    headers: { 'User-Agent': 'OmeFly/1.0' }
+  };
+  const req = http.request(options, (res) => {
     let data = '';
     res.on('data', chunk => data += chunk);
     res.on('end', () => {
       try {
         const json = JSON.parse(data);
-        cb({ country: json.country_name || 'Unknown', countryCode: json.country_code || 'UN' });
+        if (json.status === 'success') {
+          cb({ country: json.country || 'Unknown', countryCode: json.countryCode || 'UN' });
+        } else {
+          console.log('ip-api fail for', cleanIP, json);
+          cb({ country: 'Unknown', countryCode: 'UN' });
+        }
       } catch(e) { cb({ country: 'Unknown', countryCode: 'UN' }); }
     });
   });
-  req.on('error', () => cb({ country: 'Unknown', countryCode: 'UN' }));
-  req.setTimeout(3000, () => { req.destroy(); cb({ country: 'Unknown', countryCode: 'UN' }); });
+  req.on('error', (e) => { console.log('Country lookup error:', e.message); cb({ country: 'Unknown', countryCode: 'UN' }); });
+  req.setTimeout(4000, () => { req.destroy(); cb({ country: 'Unknown', countryCode: 'UN' }); });
+  req.end();
 }
 
 function cleanupRoom(roomCode) {

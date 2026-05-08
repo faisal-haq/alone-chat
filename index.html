@@ -423,9 +423,9 @@ function showCountryBadge(badgeId, flagId, nameId, countryCode, countryName) {
   const flagEl = document.getElementById(flagId);
   const nameEl = document.getElementById(nameId);
   if (!badge) return;
-  if (!countryName || countryName === 'Unknown') { badge.classList.remove('visible'); return; }
-  flagEl.textContent = countryCodeToFlag(countryCode);
-  nameEl.textContent = countryName;
+  console.log('[Country Badge]', badgeId, countryCode, countryName);
+  flagEl.textContent = countryCodeToFlag(countryCode || 'UN');
+  nameEl.textContent = countryName || 'Unknown';
   badge.classList.add('visible');
 }
 function hideCountryBadge(badgeId) {
@@ -450,6 +450,7 @@ socket.on('matched',async data=>{
     document.getElementById('global-status').style.display = 'block';
   }
   // Show stranger country badge
+  console.log('[matched] partnerCountry:', data.partnerCountry, data.partnerCountryCode);
   showCountryBadge('remote-country-badge','remote-country-flag','remote-country-name', data.partnerCountryCode, data.partnerCountry);
   partnerId=data.partnerId;showSoloVideoBoxes();waitingMsg.style.display='none';chatMessages.classList.add('active');inputArea.classList.add('active');setTimeout(()=>messageInput.focus(),100);const rb=document.getElementById('report-btn');rb.disabled=false;rb.textContent='🚩 Report';rb.style.opacity='1';status.textContent='Connected!';previewStatusEl.innerHTML='✅ Connected <span style="color:var(--accent2)">●</span>';showToast('Connected! 👋');
   const ciBar=document.getElementById('common-interests-bar');
