@@ -75,20 +75,20 @@ function generateRoomCode() {
   return code;
 }
 
-// Country lookup via ip-api.com (free, no key needed, 45 req/min limit)
+// Country lookup via ipapi.co (free, no key needed, works on servers, 1000 req/day)
 function lookupCountry(ip, cb) {
   // Skip lookup for local/private IPs
   if (!ip || ip === '::1' || ip.startsWith('127.') || ip.startsWith('192.168.') || ip.startsWith('10.') || ip === '::ffff:127.0.0.1') {
     return cb({ country: 'Local', countryCode: 'UN' });
   }
   const cleanIP = ip.replace('::ffff:', '');
-  const req = https.get(`https://ip-api.com/json/${cleanIP}?fields=country,countryCode`, (res) => {
+  const req = https.get(`https://ipapi.co/${cleanIP}/json/`, (res) => {
     let data = '';
     res.on('data', chunk => data += chunk);
     res.on('end', () => {
       try {
         const json = JSON.parse(data);
-        cb({ country: json.country || 'Unknown', countryCode: json.countryCode || 'UN' });
+        cb({ country: json.country_name || 'Unknown', countryCode: json.country_code || 'UN' });
       } catch(e) { cb({ country: 'Unknown', countryCode: 'UN' }); }
     });
   });
