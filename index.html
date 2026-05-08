@@ -328,6 +328,14 @@
 </div>
 
 <!-- BANNED SCREEN -->
+<div id="duplicate-screen" style="display:none;position:fixed;inset:0;background:var(--bg);z-index:9999;align-items:center;justify-content:center;flex-direction:column;gap:24px;text-align:center;padding:40px;">
+  <div style="font-size:4rem;">📱</div>
+  <h2 style="font-size:2rem;font-weight:800;background:linear-gradient(135deg,var(--primary-light),var(--accent2));-webkit-background-clip:text;-webkit-text-fill-color:transparent;">Already Open</h2>
+  <p style="color:var(--text-muted);max-width:420px;font-size:1rem;line-height:1.6;">OmeFly is already open in another tab or browser on this device.<br><br>Please close this tab and use the existing one.</p>
+  <div style="background:var(--surface);border:1px solid var(--border);border-radius:16px;padding:20px 32px;color:var(--text-muted);font-size:.9rem;">🔒 One device = one session</div>
+  <button onclick="location.reload()" style="padding:14px 32px;background:linear-gradient(135deg,var(--primary),var(--primary-dark));color:#fff;border:none;border-radius:50px;font-weight:700;font-size:1rem;cursor:pointer;">Try Again</button>
+</div>
+
 <div id="banned-screen" style="display:none;position:fixed;inset:0;background:var(--bg);z-index:9999;display:none;align-items:center;justify-content:center;flex-direction:column;gap:24px;text-align:center;padding:40px;">
   <div style="font-size:4rem;">🚫</div>
   <h2 style="font-size:2rem;font-weight:800;background:linear-gradient(135deg,#ff5f57,#ff6584);-webkit-background-clip:text;-webkit-text-fill-color:transparent;">You Have Been Banned</h2>
@@ -339,7 +347,17 @@
 <script>
 /* FULL ORIGINAL FUNCTIONAL JAVASCRIPT - EXACTLY from backup + UI enhancements */
 
-const socket = io();
+// Generate a persistent device ID (one per browser profile)
+function getDeviceId() {
+  let id = localStorage.getItem('omefly_device_id');
+  if (!id) {
+    id = 'dev_' + Math.random().toString(36).slice(2) + Date.now().toString(36);
+    localStorage.setItem('omefly_device_id', id);
+  }
+  return id;
+}
+const deviceId = getDeviceId();
+const socket = io({ auth: { deviceId } });
 let localStream = null, peerConnection = null, currentMode = null, partnerId = null, selectedInterests = [], hasRemoteOffer = false, pendingAnswer = null, connectionTimeout = null, isMuted = false, isCameraOff = false, pendingIceCandidates = [];
 
 const iceServers = {iceServers:[{urls:'stun:stun.l.google.com:19302'},{urls:'stun:stun1.l.google.com:19302'},{urls:'stun:stun2.l.google.com:19302'},{urls:'stun:global.stun.twilio.com:3478'},{urls:'turn:openrelay.metered.ca:80',username:'openrelayproject',credential:'openrelayproject'},{urls:'turn:openrelay.metered.ca:443',username:'openrelayproject',credential:'openrelayproject'},{urls:'turn:openrelay.metered.ca:443?transport=tcp',username:'openrelayproject',credential:'openrelayproject'}],iceCandidatePoolSize:10};
@@ -510,6 +528,13 @@ socket.on('message',data=>addMessage(data.text,'stranger'));
 socket.on('partner-media-state', data => {
   document.getElementById('remote-cam-overlay').classList.toggle('visible', !!data.camOff);
   document.getElementById('remote-mic-badge').classList.toggle('visible', !!data.micOff);
+});
+
+socket.on('duplicate-session', () => {
+  // This device already has an active session on another tab/browser
+  document.querySelectorAll('#intro-screen,#chat-screen,#group-chat-screen').forEach(el => el.style.display = 'none');
+  const dupScreen = document.getElementById('duplicate-screen');
+  dupScreen.style.display = 'flex';
 });
 
 socket.on('partner-country-update', (data) => {

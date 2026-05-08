@@ -35,6 +35,10 @@ function saveBannedIPs() {
 
 let bannedIPs = loadBannedIPs();
 
+// Track active device sessions: deviceId -> socketId
+// Prevents same browser/device opening multiple tabs
+const deviceSessions = new Map();
+
 function getClientIP(socket) {
   const forwarded = socket.handshake.headers['x-forwarded-for'];
   if (forwarded) return forwarded.split(',')[0].trim();
@@ -496,6 +500,23 @@ function getReceiverGroupSlot(receiver, sender) {
 // ---- Socket handlers ----
 io.on('connection', (socket) => {
   const clientIP = getClientIP(socket);
+  const deviceId = socket.handshake.auth && socket.handshake.auth.deviceId;
+
+  // One session per device — kick duplicate tabs/browsers
+  if (deviceId) {
+    const existingSocketId = deviceSessions.get(deviceId);
+    if (existingSocketId && existingSocketId !== socket.id) {
+      const existingSocket = io.sockets.sockets.get(existingSocketId);
+      if (existingSocket) {
+        // Old session is still alive — reject the new one
+        socket.emit('duplicate-session');
+        socket.disconnect(true);
+        return;
+      }
+    }
+    deviceSessions.set(deviceId, socket.id);
+    socket.deviceId = deviceId;
+  }
 
   // Look up country on connect — set a flag so matching waits for it
   socket.country = 'Unknown';
@@ -746,6 +767,10 @@ io.on('connection', (socket) => {
   socket.on('disconnect', () => {
     onlineCount = Math.max(0, onlineCount - 1);
     broadcastUserCount();
+    // Free up device slot so user can reconnect
+    if (socket.deviceId && deviceSessions.get(socket.deviceId) === socket.id) {
+      deviceSessions.delete(socket.deviceId);
+    }
     console.log('Disconnected:', socket.id, '| Online:', onlineCount);
     if (socket.partner && socket.partner.partner && socket.partner.partner.id === socket.id) {
       socket.partner.emit('partner-left');
