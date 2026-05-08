@@ -50,6 +50,14 @@
         .preview-body{display:grid;grid-template-columns:1fr 1fr;gap:0;height:350px;}
         .preview-video{position:relative;background:var(--bg2);overflow:hidden;}
         .video-box{width:100%;height:100%;object-fit:cover;}
+        .country-badge{position:absolute;bottom:8px;left:8px;background:rgba(0,0,0,0.6);color:#fff;font-size:12px;padding:3px 8px;border-radius:12px;display:none;align-items:center;gap:5px;z-index:10;backdrop-filter:blur(4px);}
+        .media-overlay{position:absolute;inset:0;display:none;flex-direction:column;align-items:center;justify-content:center;gap:10px;background:rgba(13,14,26,0.82);z-index:8;pointer-events:none;}
+        .media-overlay.visible{display:flex;}
+        .media-overlay-icon{font-size:2.8rem;line-height:1;}
+        .media-overlay-text{font-size:.85rem;font-weight:600;color:var(--text-muted);letter-spacing:.02em;}
+        .mic-off-badge{position:absolute;top:10px;right:10px;background:rgba(255,101,132,0.85);border-radius:50%;width:30px;height:30px;display:none;align-items:center;justify-content:center;font-size:1rem;z-index:9;backdrop-filter:blur(4px);}
+        .mic-off-badge.visible{display:flex;}
+        .country-badge.visible{display:flex;}
         .video-label{position:absolute;bottom:12px;left:12px;background:rgba(0,0,0,0.7);color:#fff;font-size:.8rem;font-weight:600;padding:4px 10px;border-radius:20px;backdrop-filter:blur(8px);}
         .video-loading{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);color:var(--text-muted);font-size:.9rem;text-align:center;display:flex;flex-direction:column;gap:8px;align-items:center;}
         .waiting-message{text-align:center;padding:60px 24px;background:var(--bg3);border-radius:var(--radius);margin:24px 0;border:1px solid var(--border);}
@@ -168,11 +176,16 @@
         <video id="local-video" autoplay muted playsinline class="video-box"></video>
         <div class="video-label">You</div>
         <div class="video-loading" id="local-loading">Loading camera...</div>
+        <div class="media-overlay" id="local-cam-overlay"><div class="media-overlay-icon">📷</div><div class="media-overlay-text">Camera Off</div></div>
+        <div class="mic-off-badge" id="local-mic-badge">🔇</div>
       </div>
       <div class="preview-video">
         <video id="remote-video" autoplay playsinline class="video-box"></video>
         <div class="video-label">Stranger</div>
         <div class="video-loading" id="remote-loading">Connecting...</div>
+        <div class="media-overlay" id="remote-cam-overlay"><div class="media-overlay-icon">📷</div><div class="media-overlay-text">Camera Off</div></div>
+        <div class="mic-off-badge" id="remote-mic-badge">🔇</div>
+        <div class="country-badge" id="remote-country-badge"><span id="remote-country-flag"></span><span id="remote-country-name"></span></div>
       </div>
     </div>
 
@@ -260,13 +273,15 @@
       </div>
       <div class="preview-video" style="border-left:1px solid var(--border);">
         <video id="group-friend-video" autoplay playsinline class="video-box"></video>
-        <div class="video-label">Your Friend</div>
+        <div class="video-label" id="group-friend-label">Your Friend</div>
         <div class="video-loading" id="group-friend-loading">Connecting...</div>
+        <div class="country-badge" id="group-friend-country-badge"><span id="group-friend-country-flag"></span><span id="group-friend-country-name"></span></div>
       </div>
       <div class="preview-video" style="border-left:1px solid var(--border);">
         <video id="group-stranger-video" autoplay playsinline class="video-box"></video>
-        <div class="video-label">Stranger</div>
+        <div class="video-label" id="group-stranger-label">Stranger</div>
         <div class="video-loading" id="group-stranger-loading">Finding stranger...</div>
+        <div class="country-badge" id="group-stranger-country-badge"><span id="group-stranger-country-flag"></span><span id="group-stranger-country-name"></span></div>
       </div>
     </div>
 
@@ -398,6 +413,26 @@ document.getElementById('modalAccept').onclick=async()=>{
 // FULL ORIGINAL SOCKET HANDLERS + WEBRTC (complete from backup)
 socket.on('user-count',(data)=>{userCountEl.textContent=data.count;document.getElementById('online-badge').textContent=data.count;});
 
+// Country badge helpers
+function countryCodeToFlag(cc) {
+  if (!cc || cc === 'UN') return '🏳️';
+  return [...cc.toUpperCase()].map(c => String.fromCodePoint(0x1F1E6 + c.charCodeAt(0) - 65)).join('');
+}
+function showCountryBadge(badgeId, flagId, nameId, countryCode, countryName) {
+  const badge = document.getElementById(badgeId);
+  const flagEl = document.getElementById(flagId);
+  const nameEl = document.getElementById(nameId);
+  if (!badge) return;
+  if (!countryName || countryName === 'Unknown') { badge.classList.remove('visible'); return; }
+  flagEl.textContent = countryCodeToFlag(countryCode);
+  nameEl.textContent = countryName;
+  badge.classList.add('visible');
+}
+function hideCountryBadge(badgeId) {
+  const el = document.getElementById(badgeId);
+  if (el) el.classList.remove('visible');
+}
+
 socket.on('waiting',()=>{if(groupChatScreen&&groupChatScreen.style.display==='block')return;showSoloVideoBoxes();waitingMsg.style.display='block';chatMessages.classList.remove('active');inputArea.classList.remove('active');status.textContent='Looking for stranger...';previewStatusEl.textContent='Waiting...';remoteLoading.style.display='flex';});
 
 socket.on('matched',async data=>{
@@ -414,6 +449,8 @@ socket.on('matched',async data=>{
     chatScreen.style.display = 'block'; chatScreen.classList.add('active');
     document.getElementById('global-status').style.display = 'block';
   }
+  // Show stranger country badge
+  showCountryBadge('remote-country-badge','remote-country-flag','remote-country-name', data.partnerCountryCode, data.partnerCountry);
   partnerId=data.partnerId;showSoloVideoBoxes();waitingMsg.style.display='none';chatMessages.classList.add('active');inputArea.classList.add('active');setTimeout(()=>messageInput.focus(),100);const rb=document.getElementById('report-btn');rb.disabled=false;rb.textContent='🚩 Report';rb.style.opacity='1';status.textContent='Connected!';previewStatusEl.innerHTML='✅ Connected <span style="color:var(--accent2)">●</span>';showToast('Connected! 👋');
   const ciBar=document.getElementById('common-interests-bar');
   const ciList=document.getElementById('common-interests-list');
@@ -469,6 +506,11 @@ async function processPendingIceCandidates(){if(peerConnection&&peerConnection.r
 
 socket.on('message',data=>addMessage(data.text,'stranger'));
 
+socket.on('partner-media-state', data => {
+  document.getElementById('remote-cam-overlay').classList.toggle('visible', !!data.camOff);
+  document.getElementById('remote-mic-badge').classList.toggle('visible', !!data.micOff);
+});
+
 socket.on('partner-left',()=>{
   // 1. Close peer connection immediately — stops all audio/video
   if(peerConnection){peerConnection.close();peerConnection=null;}
@@ -477,7 +519,10 @@ socket.on('partner-left',()=>{
   // 3. Reset signaling state
   partnerId=null;hasRemoteOffer=false;pendingIceCandidates=[];pendingAnswer=null;
   if(connectionTimeout){clearTimeout(connectionTimeout);connectionTimeout=null;}
+  hideCountryBadge('remote-country-badge');
   document.getElementById('common-interests-bar').style.display='none';
+  document.getElementById('remote-cam-overlay').classList.remove('visible');
+  document.getElementById('remote-mic-badge').classList.remove('visible');
   // 4. Update UI — show waiting, find new partner
   remoteLoading.style.display='flex';
   chatMessages.innerHTML='';messageInput.value='';
@@ -495,9 +540,9 @@ function sendMessage(){const text=messageInput.value.trim();if(text&&partnerId){
 
 function addMessage(text,sender){const div=document.createElement('div');div.className=`message-box message-${sender}`;div.textContent=text;chatMessages.appendChild(div);chatMessages.scrollTop=chatMessages.scrollHeight;}
 
-function toggleMute(){isMuted=!isMuted;if(localStream)localStream.getAudioTracks().forEach(t=>t.enabled=!isMuted);document.getElementById('mute-btn').classList.toggle('muted',isMuted);document.getElementById('mute-btn').title=isMuted?'Unmute':'Mute';}
+function toggleMute(){isMuted=!isMuted;if(localStream)localStream.getAudioTracks().forEach(t=>t.enabled=!isMuted);document.getElementById('mute-btn').classList.toggle('muted',isMuted);document.getElementById('mute-btn').title=isMuted?'Unmute':'Mute';document.getElementById('local-mic-badge').classList.toggle('visible',isMuted);if(partnerId)socket.emit('media-state',{micOff:isMuted,camOff:isCameraOff});}
 
-function toggleCamera(){isCameraOff=!isCameraOff;if(localStream)localStream.getVideoTracks().forEach(t=>t.enabled=!isCameraOff);localVideo.style.display=isCameraOff?'none':'block';document.getElementById('camera-btn').classList.toggle('camera-off',isCameraOff);document.getElementById('camera-btn').title=isCameraOff?'Camera On':'Camera Off';}
+function toggleCamera(){isCameraOff=!isCameraOff;if(localStream)localStream.getVideoTracks().forEach(t=>t.enabled=!isCameraOff);localVideo.style.display=isCameraOff?'none':'block';document.getElementById('camera-btn').classList.toggle('camera-off',isCameraOff);document.getElementById('camera-btn').title=isCameraOff?'Camera On':'Camera Off';document.getElementById('local-cam-overlay').classList.toggle('visible',isCameraOff);if(partnerId)socket.emit('media-state',{micOff:isMuted,camOff:isCameraOff});}
 
 function stopChat(){
   // 1. Tell server to fully disconnect (not re-queue)
@@ -942,6 +987,16 @@ socket.on('group-matched', async (data) => {
   groupStrangerLoading.textContent = 'Connecting...';
 
   // Common interests
+  // Show country badges for each peer by slot
+  if (data.peers) {
+    data.peers.forEach(peer => {
+      if (peer.slot === 0) {
+        showCountryBadge('group-friend-country-badge','group-friend-country-flag','group-friend-country-name', peer.countryCode, peer.country);
+      } else if (peer.slot === 1) {
+        showCountryBadge('group-stranger-country-badge','group-stranger-country-flag','group-stranger-country-name', peer.countryCode, peer.country);
+      }
+    });
+  }
   const ciBar = document.getElementById('group-common-interests-bar');
   const ciList = document.getElementById('group-common-interests-list');
   if (data.commonInterests && data.commonInterests.length > 0) {
@@ -1068,7 +1123,8 @@ socket.on('group-partner-left', (data) => {
     groupStrangerVideo.srcObject = null;
     groupStrangerLoading.style.display = 'flex';
     groupStrangerLoading.textContent = 'Finding new stranger...';
-    document.getElementById('group-common-interests-bar').style.display = 'none';
+    hideCountryBadge('group-friend-country-badge'); hideCountryBadge('group-stranger-country-badge');
+  document.getElementById('group-common-interests-bar').style.display = 'none';
     // Clear only stranger slot state — friend slot stays intact (no blink)
     const strangerPeerId = data.senderId;
     delete groupPCs[strangerPeerId];

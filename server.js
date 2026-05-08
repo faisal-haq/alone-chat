@@ -1,4 +1,5 @@
 const express = require('express');
+const https = require('https');
 const http = require('http');
 const socketIo = require('socket.io');
 const path = require('path');
@@ -72,6 +73,27 @@ function generateRoomCode() {
   let code = '';
   for (let i = 0; i < 6; i++) code += chars[Math.floor(Math.random() * chars.length)];
   return code;
+}
+
+// Country lookup via ip-api.com (free, no key needed, 45 req/min limit)
+function lookupCountry(ip, cb) {
+  // Skip lookup for local/private IPs
+  if (!ip || ip === '::1' || ip.startsWith('127.') || ip.startsWith('192.168.') || ip.startsWith('10.') || ip === '::ffff:127.0.0.1') {
+    return cb({ country: 'Local', countryCode: 'UN' });
+  }
+  const cleanIP = ip.replace('::ffff:', '');
+  const req = https.get(`https://ip-api.com/json/${cleanIP}?fields=country,countryCode`, (res) => {
+    let data = '';
+    res.on('data', chunk => data += chunk);
+    res.on('end', () => {
+      try {
+        const json = JSON.parse(data);
+        cb({ country: json.country || 'Unknown', countryCode: json.countryCode || 'UN' });
+      } catch(e) { cb({ country: 'Unknown', countryCode: 'UN' }); }
+    });
+  });
+  req.on('error', () => cb({ country: 'Unknown', countryCode: 'UN' }));
+  req.setTimeout(3000, () => { req.destroy(); cb({ country: 'Unknown', countryCode: 'UN' }); });
 }
 
 function cleanupRoom(roomCode) {
@@ -167,8 +189,8 @@ function findAndMatchGroup(roomCode, directStranger = null) {
       data: {
         sessionId, role: 'friend', commonInterests,
         peers: [
-          { id: f1.id, slot: 0, isOfferer: f0.id < f1.id },
-          { id: st.id, slot: 1, isOfferer: f0.id < st.id }
+          { id: f1.id, slot: 0, isOfferer: f0.id < f1.id, country: f1.country || 'Unknown', countryCode: f1.countryCode || 'UN' },
+          { id: st.id, slot: 1, isOfferer: f0.id < st.id, country: st.country || 'Unknown', countryCode: st.countryCode || 'UN' }
         ]
       }
     },
@@ -177,8 +199,8 @@ function findAndMatchGroup(roomCode, directStranger = null) {
       data: {
         sessionId, role: 'friend', commonInterests,
         peers: [
-          { id: f0.id, slot: 0, isOfferer: f1.id < f0.id },
-          { id: st.id, slot: 1, isOfferer: f1.id < st.id }
+          { id: f0.id, slot: 0, isOfferer: f1.id < f0.id, country: f0.country || 'Unknown', countryCode: f0.countryCode || 'UN' },
+          { id: st.id, slot: 1, isOfferer: f1.id < st.id, country: st.country || 'Unknown', countryCode: st.countryCode || 'UN' }
         ]
       }
     },
@@ -187,8 +209,8 @@ function findAndMatchGroup(roomCode, directStranger = null) {
       data: {
         sessionId, role: 'stranger', commonInterests,
         peers: [
-          { id: f0.id, slot: 0, isOfferer: st.id < f0.id },
-          { id: f1.id, slot: 1, isOfferer: st.id < f1.id }
+          { id: f0.id, slot: 0, isOfferer: st.id < f0.id, country: f0.country || 'Unknown', countryCode: f0.countryCode || 'UN' },
+          { id: f1.id, slot: 1, isOfferer: st.id < f1.id, country: f1.country || 'Unknown', countryCode: f1.countryCode || 'UN' }
         ]
       }
     }
@@ -352,8 +374,8 @@ function matchSockets(a, b, commonInterests = []) {
   b.isSearching = false;
   a.sessionId = sessionId;
   b.sessionId = sessionId;
-  a.emit('matched', { partnerId: b.id, sessionId, commonInterests, isOfferer: a.id < b.id });
-  b.emit('matched', { partnerId: a.id, sessionId, commonInterests, isOfferer: b.id < a.id });
+  a.emit('matched', { partnerId: b.id, sessionId, commonInterests, isOfferer: a.id < b.id, partnerCountry: b.country || 'Unknown', partnerCountryCode: b.countryCode || 'UN' });
+  b.emit('matched', { partnerId: a.id, sessionId, commonInterests, isOfferer: b.id < a.id, partnerCountry: a.country || 'Unknown', partnerCountryCode: a.countryCode || 'UN' });
   console.log(`Matched: ${a.id} <-> ${b.id} | Common: [${commonInterests.join(', ')}]`);
 }
 
@@ -461,6 +483,14 @@ function getReceiverGroupSlot(receiver, sender) {
 // ---- Socket handlers ----
 io.on('connection', (socket) => {
   const clientIP = getClientIP(socket);
+
+  // Look up country on connect
+  socket.country = 'Unknown';
+  socket.countryCode = 'UN';
+  lookupCountry(clientIP, ({ country, countryCode }) => {
+    socket.country = country;
+    socket.countryCode = countryCode;
+  });
 
   // Check ban on connect
   if (bannedIPs.has(clientIP)) {
@@ -687,6 +717,10 @@ io.on('connection', (socket) => {
   // ---- chat message ----
   socket.on('message', (data) => {
     if (socket.partner) socket.partner.emit('message', data);
+  });
+
+  socket.on('media-state', (data) => {
+    if (socket.partner) socket.partner.emit('partner-media-state', data);
   });
 
   // ---- disconnect ----
