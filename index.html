@@ -511,6 +511,11 @@ socket.on('partner-media-state', data => {
   document.getElementById('remote-mic-badge').classList.toggle('visible', !!data.micOff);
 });
 
+socket.on('partner-country-update', (data) => {
+  // Country lookup finished after match — update badge with real country
+  showCountryBadge('remote-country-badge','remote-country-flag','remote-country-name', data.countryCode, data.country);
+});
+
 socket.on('partner-left',()=>{
   // 1. Close peer connection immediately — stops all audio/video
   if(peerConnection){peerConnection.close();peerConnection=null;}

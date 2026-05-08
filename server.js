@@ -484,12 +484,18 @@ function getReceiverGroupSlot(receiver, sender) {
 io.on('connection', (socket) => {
   const clientIP = getClientIP(socket);
 
-  // Look up country on connect
+  // Look up country on connect — set a flag so matching waits for it
   socket.country = 'Unknown';
   socket.countryCode = 'UN';
+  socket.countryReady = false;
   lookupCountry(clientIP, ({ country, countryCode }) => {
     socket.country = country;
     socket.countryCode = countryCode;
+    socket.countryReady = true;
+    // If already matched with a partner, push updated country to their client
+    if (socket.partner) {
+      socket.partner.emit('partner-country-update', { country, countryCode });
+    }
   });
 
   // Check ban on connect
