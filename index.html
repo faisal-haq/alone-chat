@@ -459,9 +459,47 @@ function hideCountryBadge(badgeId) {
 const DECOY_VIDEOS=['/decoy/decoy1.mp4','/decoy/decoy2.mp4','/decoy/decoy3.mp4','/decoy/decoy4.mp4','/decoy/decoy5.mp4'];
 const decoyVideo=document.getElementById('decoy-video');
 let decoyActive=false;
-function startDecoy(){if(!decoyVideo)return;decoyActive=true;decoyVideo.src=DECOY_VIDEOS[Math.floor(Math.random()*DECOY_VIDEOS.length)];decoyVideo.loop=false;decoyVideo.style.display='block';remoteLoading.style.display='none';waitingMsg.style.display='none';decoyVideo.onended=()=>{if(decoyActive)playNextDecoy();};decoyVideo.play().catch(()=>{});}
-function playNextDecoy(){if(!decoyActive||!decoyVideo)return;decoyVideo.src=DECOY_VIDEOS[Math.floor(Math.random()*DECOY_VIDEOS.length)];decoyVideo.play().catch(()=>{});}
+// ── Bug 3 fix: load() before play() so 'ended' fires reliably every time ────
+function _playDecoyVideo(videoEl, onEnd) {
+  const src = DECOY_VIDEOS[Math.floor(Math.random()*DECOY_VIDEOS.length)];
+  videoEl.src = src;
+  videoEl.load();
+  videoEl.onended = onEnd;
+  videoEl.play().catch(()=>{});
+}
+
+// Solo decoy (stranger slot in solo chat)
+function startDecoy(){if(!decoyVideo)return;decoyActive=true;decoyVideo.style.display='block';remoteLoading.style.display='none';waitingMsg.style.display='none';_playDecoyVideo(decoyVideo,()=>{if(decoyActive)_playDecoyVideo(decoyVideo,arguments.callee);});}
+function playNextDecoy(){if(!decoyActive||!decoyVideo)return;_playDecoyVideo(decoyVideo,()=>{if(decoyActive)_playDecoyVideo(decoyVideo,arguments.callee);});}
 function stopDecoy(){if(!decoyVideo)return;decoyActive=false;decoyVideo.pause();decoyVideo.removeAttribute('src');decoyVideo.load();decoyVideo.style.display='none';}
+
+// ── Bug 2 fix: group decoy in groupStrangerVideo slot ────────────────────────
+let groupDecoyActive = false;
+function startGroupDecoy() {
+  if (!groupStrangerVideo) return;
+  groupDecoyActive = true;
+  groupStrangerLoading.style.display = 'none';
+  groupStrangerVideo.style.display = 'block';
+  function playOne() {
+    if (!groupDecoyActive) return;
+    const src = DECOY_VIDEOS[Math.floor(Math.random()*DECOY_VIDEOS.length)];
+    groupStrangerVideo.src = src;
+    groupStrangerVideo.muted = true;
+    groupStrangerVideo.autoplay = true;
+    groupStrangerVideo.load();
+    groupStrangerVideo.onended = () => { if (groupDecoyActive) playOne(); };
+    groupStrangerVideo.play().catch(()=>{});
+  }
+  playOne();
+}
+function stopGroupDecoy() {
+  groupDecoyActive = false;
+  if (!groupStrangerVideo) return;
+  groupStrangerVideo.pause();
+  groupStrangerVideo.removeAttribute('src');
+  groupStrangerVideo.load();
+  groupStrangerVideo.srcObject = null;
+}
 // ────────────────────────────────────────────────────────────────────────────
 
 socket.on('waiting',()=>{if(groupChatScreen&&groupChatScreen.style.display==='block')return;showSoloVideoBoxes();waitingMsg.style.display='block';chatMessages.classList.remove('active');inputArea.classList.remove('active');status.textContent='Looking for stranger...';previewStatusEl.textContent='Waiting...';remoteLoading.style.display='flex';startDecoy();});
@@ -1027,6 +1065,7 @@ socket.on('group-matched', async (data) => {
     groupFriendLoading.style.display = 'flex';
     groupFriendLoading.textContent = 'Connecting...';
   }
+  stopGroupDecoy(); // stop decoy before real stranger connects
   groupStrangerLoading.style.display = groupSlotHasLiveStream(1) ? 'none' : 'flex';
   groupStrangerLoading.textContent = 'Connecting...';
 
@@ -1053,9 +1092,21 @@ socket.on('group-matched', async (data) => {
   // renegotiate and doing so would cause the friend video to blink.
   for (const peer of data.peers) {
     if (peer.slot === 0 && groupSlotHasLiveStream(0)) {
-      // Friend connection still alive — just update the slot map, don't renegotiate
-      groupSlotMap[peer.id] = peer.slot;
-      groupIsOfferer[peer.id] = peer.isOfferer;
+      // FIX: Friend connection still alive — update slot map with NEW peer.id
+      // (server may reassign peer objects on requeue; old id stale → PC not found)
+      // Find existing slot-0 PC and remap it to the new peer id
+      const oldPid = Object.keys(groupPCs).find(pid => groupPCs[pid] && groupPCs[pid].slot === 0);
+      if (oldPid && oldPid !== peer.id) {
+        groupPCs[peer.id] = groupPCs[oldPid];
+        groupSlotMap[peer.id] = 0;
+        groupIsOfferer[peer.id] = peer.isOfferer;
+        delete groupPCs[oldPid];
+        delete groupSlotMap[oldPid];
+        delete groupIsOfferer[oldPid];
+      } else {
+        groupSlotMap[peer.id] = peer.slot;
+        groupIsOfferer[peer.id] = peer.isOfferer;
+      }
       continue;
     }
     await startGroupPeer(peer, stream);
@@ -1165,10 +1216,9 @@ socket.on('group-partner-left', (data) => {
   if (groupChatScreen.style.display === 'block') {
     groupWaitingMsg.style.display = 'block';
     groupStrangerVideo.srcObject = null;
-    groupStrangerLoading.style.display = 'flex';
-    groupStrangerLoading.textContent = 'Finding new stranger...';
+    groupStrangerLoading.style.display = 'none';
     hideCountryBadge('group-friend-country-badge'); hideCountryBadge('group-stranger-country-badge');
-  document.getElementById('group-common-interests-bar').style.display = 'none';
+    document.getElementById('group-common-interests-bar').style.display = 'none';
     // Clear only stranger slot state — friend slot stays intact (no blink)
     const strangerPeerId = data.senderId;
     delete groupPCs[strangerPeerId];
@@ -1176,6 +1226,8 @@ socket.on('group-partner-left', (data) => {
     delete groupIsOfferer[strangerPeerId];
     delete groupPendingIce[strangerPeerId];
     delete groupRemoteStreams[strangerPeerId];
+    // FIX Bug 2: play decoy in stranger slot while searching for real stranger
+    startGroupDecoy();
   }
 });
 
@@ -1215,6 +1267,7 @@ function stopGroupChat() {
   Object.values(groupPCs).forEach(e => { try { e.pc.close(); } catch(e){} });
   groupPCs = {}; groupSlotMap = {}; groupIsOfferer = {}; groupPendingIce = {};
   groupRemoteStreams = {}; currentGroupRole = null;
+  stopGroupDecoy();
   if (groupLocalStream) { groupLocalStream.getTracks().forEach(t => t.stop()); groupLocalStream = null; }
   if (localStream) { localStream.getTracks().forEach(t => t.stop()); localStream = null; }
   _streamPromise = null;
@@ -1271,12 +1324,12 @@ function nextGroupChat() {
     document.getElementById('group-common-interests-bar').style.display = 'none';
 
     // Show waiting UI for stranger slot only; friend slot stays live (no blink)
-    groupStrangerLoading.style.display = 'flex';
-    groupStrangerLoading.textContent = 'Finding stranger...';
+    groupStrangerLoading.style.display = 'none';
     groupWaitingMsg.style.display = 'block';
     showGroupVideoBoxes();
     groupPreviewStatus.textContent = 'Waiting...';
     status.textContent = 'Finding new stranger...';
+    startGroupDecoy(); // play decoy in stranger slot while searching
   }
 
   socket.emit('group-next');
