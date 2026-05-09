@@ -52,7 +52,7 @@
         .video-box{width:100%;height:100%;object-fit:cover;}
         #local-video,#group-local-video{transform:scaleX(-1);}
         #decoy-video{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;display:none;z-index:1;}
-        #remote-video{position:relative;z-index:2;}
+        /* remote-video: no position override — stays in normal flow filling .preview-video */
         .country-badge{position:absolute;top:8px;right:8px;background:rgba(0,0,0,0.6);color:#fff;font-size:12px;padding:3px 8px;border-radius:12px;display:none;align-items:center;gap:5px;z-index:10;backdrop-filter:blur(4px);}
         .media-overlay{position:absolute;inset:0;display:none;flex-direction:column;align-items:center;justify-content:center;gap:10px;background:rgba(13,14,26,0.82);z-index:8;pointer-events:none;}
         .media-overlay.visible{display:flex;}
@@ -825,6 +825,24 @@ async function startGroupPeer(peer, stream) {
     attachGroupRemoteStream(peer.id, groupRemoteStreams[peer.id], groupRemoteStreams[peer.id].getVideoTracks().length > 0);
   }
 
+  // Fix: if PC has stale descriptions (reused from prev session), close+recreate
+  // so a fresh offer can be sent. Without this, video never connects on requeue.
+  if (pc.localDescription || pc.remoteDescription) {
+    try { pc.close(); } catch(e) {}
+    delete groupPCs[peer.id];
+    const freshPc = ensureGroupPC(peer.id, peer.slot);
+    addLocalTracksToGroupPC(freshPc, stream);
+    ensureGroupReceiveTransceivers(freshPc);
+    if (groupRemoteStreams[peer.id]) {
+      attachGroupRemoteStream(peer.id, groupRemoteStreams[peer.id], groupRemoteStreams[peer.id].getVideoTracks().length > 0);
+    }
+    if (peer.isOfferer) {
+      const offer = await freshPc.createOffer({ offerToReceiveAudio: true, offerToReceiveVideo: true });
+      await freshPc.setLocalDescription(offer);
+      socket.emit('group-offer', { sdp: offer.sdp, targetId: peer.id, slot: peer.slot, receiverSlot: peer.slot === 0 ? 1 : 0 });
+    }
+    return;
+  }
   if (peer.isOfferer && pc.signalingState === 'stable' && !pc.localDescription && !pc.remoteDescription) {
     const offer = await pc.createOffer({ offerToReceiveAudio: true, offerToReceiveVideo: true });
     await pc.setLocalDescription(offer);
