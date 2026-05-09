@@ -91,7 +91,7 @@
         @keyframes fadeInDown{from{opacity:0;transform:translateY(-16px);}to{opacity:1;transform:translateY(0);}}
         @keyframes fadeInUp{from{opacity:0;transform:translateY(20px);}to{opacity:1;transform:translateY(0);}}
         @keyframes fadeIn{from{opacity:0;}to{opacity:1;}}
-        @media (max-width:768px){nav{padding:0 20px;}.preview-body{grid-template-columns:1fr;height:auto;}.preview-video{height:50vw;min-height:200px;max-height:300px;}.preview-video:first-child{border-bottom:1px solid var(--border);}.hero-actions{flex-direction:column;width:100%;}.btn-primary,.btn-secondary{width:100%;justify-content:center;}.chat-messages{grid-template-columns:1fr;}#group-video-wrapper{grid-template-columns:1fr!important;height:auto!important;}#group-video-wrapper .preview-video{height:50vw;min-height:180px;max-height:280px;}}
+        @media (max-width:768px){nav{padding:0 20px;}.preview-body{grid-template-columns:1fr;height:auto;}.preview-video{height:48vw;min-height:180px;max-height:280px;}.preview-video:first-child{border-bottom:1px solid var(--border);}.hero-actions{flex-direction:column;width:100%;}.btn-primary,.btn-secondary{width:100%;justify-content:center;}.chat-messages{grid-template-columns:1fr;}#group-video-wrapper{grid-template-columns:1fr!important;height:auto!important;}#group-video-wrapper .preview-video{height:48vw;min-height:160px;max-height:260px;}}
     </style>
 </head>
 <body>
@@ -573,7 +573,7 @@ function addMessage(text,sender){const div=document.createElement('div');div.cla
 
 function toggleMute(){isMuted=!isMuted;if(localStream)localStream.getAudioTracks().forEach(t=>t.enabled=!isMuted);document.getElementById('mute-btn').classList.toggle('muted',isMuted);document.getElementById('mute-btn').title=isMuted?'Unmute':'Mute';document.getElementById('local-mic-badge').classList.toggle('visible',isMuted);if(partnerId)socket.emit('media-state',{micOff:isMuted,camOff:isCameraOff});}
 
-function toggleCamera(){isCameraOff=!isCameraOff;if(localStream)localStream.getVideoTracks().forEach(t=>t.enabled=!isCameraOff);/* FIX: never hide localVideo element — box collapses on mobile. Show overlay instead. */document.getElementById('camera-btn').classList.toggle('camera-off',isCameraOff);document.getElementById('camera-btn').title=isCameraOff?'Camera On':'Camera Off';document.getElementById('local-cam-overlay').classList.toggle('visible',isCameraOff);if(partnerId)socket.emit('media-state',{micOff:isMuted,camOff:isCameraOff});}
+function toggleCamera(){isCameraOff=!isCameraOff;if(localStream)localStream.getVideoTracks().forEach(t=>t.enabled=!isCameraOff);/* keep localVideo visible so box doesn't collapse — overlay covers it */document.getElementById('camera-btn').classList.toggle('camera-off',isCameraOff);document.getElementById('camera-btn').title=isCameraOff?'Camera On':'Camera Off';document.getElementById('local-cam-overlay').classList.toggle('visible',isCameraOff);if(partnerId)socket.emit('media-state',{micOff:isMuted,camOff:isCameraOff});}
 
 function stopChat(){
   // 1. Tell server to fully disconnect (not re-queue)
@@ -655,7 +655,7 @@ async function nextChat(){
   inputArea.classList.remove('active');
 }
 
-function resetChat(){partnerId=null;chatMessages.innerHTML='';messageInput.value='';hasRemoteOffer=false;pendingAnswer=null;if(connectionTimeout)clearTimeout(connectionTimeout);isMuted=false;document.getElementById('mute-btn').classList.remove('muted');isCameraOff=false;document.getElementById('camera-btn').classList.remove('camera-off');}
+function resetChat(){partnerId=null;chatMessages.innerHTML='';messageInput.value='';hasRemoteOffer=false;pendingAnswer=null;if(connectionTimeout)clearTimeout(connectionTimeout);isMuted=false;document.getElementById('mute-btn').classList.remove('muted');isCameraOff=false;document.getElementById('camera-btn').classList.remove('camera-off');localVideo.style.display='block';}
 
 document.getElementById('btn-friend').onclick = () => openFriendModal();
 
