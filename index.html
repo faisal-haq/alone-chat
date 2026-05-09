@@ -50,9 +50,7 @@
         .preview-body{display:grid;grid-template-columns:1fr 1fr;gap:0;height:350px;}
         .preview-video{position:relative;background:var(--bg2);overflow:hidden;}
         .video-box{width:100%;height:100%;object-fit:cover;}
-        /* Decoy video sits behind real remote video inside same container */
-        #decoy-video{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;display:none;z-index:1;}
-        #remote-video{position:relative;z-index:2;width:100%;height:100%;object-fit:cover;}
+        #local-video,#group-local-video{transform:scaleX(-1);} /* mirror own camera — natural selfie view */
         .country-badge{position:absolute;top:8px;right:8px;background:rgba(0,0,0,0.6);color:#fff;font-size:12px;padding:3px 8px;border-radius:12px;display:none;align-items:center;gap:5px;z-index:10;backdrop-filter:blur(4px);}
         .media-overlay{position:absolute;inset:0;display:none;flex-direction:column;align-items:center;justify-content:center;gap:10px;background:rgba(13,14,26,0.82);z-index:8;pointer-events:none;}
         .media-overlay.visible{display:flex;}
@@ -94,7 +92,7 @@
         @keyframes fadeInDown{from{opacity:0;transform:translateY(-16px);}to{opacity:1;transform:translateY(0);}}
         @keyframes fadeInUp{from{opacity:0;transform:translateY(20px);}to{opacity:1;transform:translateY(0);}}
         @keyframes fadeIn{from{opacity:0;}to{opacity:1;}}
-        @media (max-width:768px){nav{padding:0 20px;}.preview-body{grid-template-columns:1fr;height:auto;}.preview-video{height:48vw;min-height:180px;max-height:280px;}.preview-video:first-child{border-bottom:1px solid var(--border);}.hero-actions{flex-direction:column;width:100%;}.btn-primary,.btn-secondary{width:100%;justify-content:center;}.chat-messages{grid-template-columns:1fr;}#group-video-wrapper{grid-template-columns:1fr!important;height:auto!important;}#group-video-wrapper .preview-video{height:48vw;min-height:160px;max-height:260px;}}
+        @media (max-width:768px){nav{padding:0 20px;}.preview-body{grid-template-columns:1fr;height:auto;}.preview-video:first-child{border-bottom:1px solid var(--border);}.hero-actions{flex-direction:column;width:100%;}.btn-primary,.btn-secondary{width:100%;justify-content:center;}.chat-messages{grid-template-columns:1fr;}#group-video-wrapper{grid-template-columns:1fr!important;height:auto!important;}}
     </style>
 </head>
 <body>
@@ -183,7 +181,6 @@
         <div class="mic-off-badge" id="local-mic-badge">🔇</div>
       </div>
       <div class="preview-video">
-        <video id="decoy-video" autoplay muted playsinline></video>
         <video id="remote-video" autoplay playsinline class="video-box"></video>
         <div class="video-label">Stranger</div>
         <div class="video-loading" id="remote-loading">Connecting...</div>
@@ -455,42 +452,7 @@ function hideCountryBadge(badgeId) {
   if (el) el.classList.remove('visible');
 }
 
-// ── Decoy stranger video ────────────────────────────────────────────────────
-const DECOY_VIDEOS=['/decoy/decoy1.mp4','/decoy/decoy2.mp4','/decoy/decoy3.mp4','/decoy/decoy4.mp4','/decoy/decoy5.mp4'];
-const decoyVideo=document.getElementById('decoy-video');
-let decoyActive=false;
-
-function startDecoy(){
-  if(!decoyVideo)return;
-  decoyActive=true;
-  const src=DECOY_VIDEOS[Math.floor(Math.random()*DECOY_VIDEOS.length)];
-  decoyVideo.src=src;
-  decoyVideo.loop=false;
-  decoyVideo.style.display='block';
-  // Hide loading spinner — decoy IS the visual
-  remoteLoading.style.display='none';
-  waitingMsg.style.display='none';
-  decoyVideo.onended=()=>{ if(decoyActive) playNextDecoy(); };
-  decoyVideo.play().catch(()=>{});
-}
-
-function playNextDecoy(){
-  if(!decoyActive||!decoyVideo)return;
-  decoyVideo.src=DECOY_VIDEOS[Math.floor(Math.random()*DECOY_VIDEOS.length)];
-  decoyVideo.play().catch(()=>{});
-}
-
-function stopDecoy(){
-  if(!decoyVideo)return;
-  decoyActive=false;
-  decoyVideo.pause();
-  decoyVideo.removeAttribute('src');
-  decoyVideo.load();
-  decoyVideo.style.display='none';
-}
-// ────────────────────────────────────────────────────────────────────────────
-
-socket.on('waiting',()=>{if(groupChatScreen&&groupChatScreen.style.display==='block')return;showSoloVideoBoxes();waitingMsg.style.display='block';chatMessages.classList.remove('active');inputArea.classList.remove('active');status.textContent='Looking for stranger...';previewStatusEl.textContent='Waiting...';remoteLoading.style.display='flex';startDecoy();});
+socket.on('waiting',()=>{if(groupChatScreen&&groupChatScreen.style.display==='block')return;showSoloVideoBoxes();waitingMsg.style.display='block';chatMessages.classList.remove('active');inputArea.classList.remove('active');status.textContent='Looking for stranger...';previewStatusEl.textContent='Waiting...';remoteLoading.style.display='flex';});
 
 socket.on('matched',async data=>{
   if(data.partnerId===socket.id){socket.emit('next');return;}
@@ -509,7 +471,7 @@ socket.on('matched',async data=>{
   // Show stranger country badge
   console.log('[matched] partnerCountry:', data.partnerCountry, data.partnerCountryCode);
   showCountryBadge('remote-country-badge','remote-country-flag','remote-country-name', data.partnerCountryCode, data.partnerCountry);
-  stopDecoy();partnerId=data.partnerId;showSoloVideoBoxes();waitingMsg.style.display='none';chatMessages.classList.add('active');inputArea.classList.add('active');setTimeout(()=>messageInput.focus(),100);const rb=document.getElementById('report-btn');rb.disabled=false;rb.textContent='🚩 Report';rb.style.opacity='1';status.textContent='Connected!';previewStatusEl.innerHTML='✅ Connected <span style="color:var(--accent2)">●</span>';showToast('Connected! 👋');
+  partnerId=data.partnerId;showSoloVideoBoxes();waitingMsg.style.display='none';chatMessages.classList.add('active');inputArea.classList.add('active');setTimeout(()=>messageInput.focus(),100);const rb=document.getElementById('report-btn');rb.disabled=false;rb.textContent='🚩 Report';rb.style.opacity='1';status.textContent='Connected!';previewStatusEl.innerHTML='✅ Connected <span style="color:var(--accent2)">●</span>';showToast('Connected! 👋');
   const ciBar=document.getElementById('common-interests-bar');
   const ciList=document.getElementById('common-interests-list');
   if(data.commonInterests&&data.commonInterests.length>0){
@@ -585,7 +547,7 @@ socket.on('partner-left',()=>{
   // 1. Close peer connection immediately — stops all audio/video
   if(peerConnection){peerConnection.close();peerConnection=null;}
   // 2. Stop and clear remote stream tracks
-  stopDecoy();if(remoteVideo.srcObject){remoteVideo.srcObject.getTracks().forEach(t=>t.stop());remoteVideo.srcObject=null;}
+  if(remoteVideo.srcObject){remoteVideo.srcObject.getTracks().forEach(t=>t.stop());remoteVideo.srcObject=null;}
   // 3. Reset signaling state
   partnerId=null;hasRemoteOffer=false;pendingIceCandidates=[];pendingAnswer=null;
   if(connectionTimeout){clearTimeout(connectionTimeout);connectionTimeout=null;}
@@ -612,7 +574,7 @@ function addMessage(text,sender){const div=document.createElement('div');div.cla
 
 function toggleMute(){isMuted=!isMuted;if(localStream)localStream.getAudioTracks().forEach(t=>t.enabled=!isMuted);document.getElementById('mute-btn').classList.toggle('muted',isMuted);document.getElementById('mute-btn').title=isMuted?'Unmute':'Mute';document.getElementById('local-mic-badge').classList.toggle('visible',isMuted);if(partnerId)socket.emit('media-state',{micOff:isMuted,camOff:isCameraOff});}
 
-function toggleCamera(){isCameraOff=!isCameraOff;if(localStream)localStream.getVideoTracks().forEach(t=>t.enabled=!isCameraOff);document.getElementById('camera-btn').classList.toggle('camera-off',isCameraOff);document.getElementById('camera-btn').title=isCameraOff?'Camera On':'Camera Off';document.getElementById('local-cam-overlay').classList.toggle('visible',isCameraOff);if(partnerId)socket.emit('media-state',{micOff:isMuted,camOff:isCameraOff});}
+function toggleCamera(){isCameraOff=!isCameraOff;if(localStream)localStream.getVideoTracks().forEach(t=>t.enabled=!isCameraOff);localVideo.style.display=isCameraOff?'none':'block';document.getElementById('camera-btn').classList.toggle('camera-off',isCameraOff);document.getElementById('camera-btn').title=isCameraOff?'Camera On':'Camera Off';document.getElementById('local-cam-overlay').classList.toggle('visible',isCameraOff);if(partnerId)socket.emit('media-state',{micOff:isMuted,camOff:isCameraOff});}
 
 function stopChat(){
   // 1. Tell server to fully disconnect (not re-queue)
