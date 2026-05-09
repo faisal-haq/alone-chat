@@ -180,7 +180,8 @@
         <div class="mic-off-badge" id="local-mic-badge">🔇</div>
       </div>
       <div class="preview-video">
-        <video id="remote-video" autoplay playsinline class="video-box"></video>
+        <video id="decoy-video" autoplay muted playsinline loop class="video-box" style="position:absolute;top:0;left:0;width:100%;height:100%;object-fit:cover;display:none;z-index:1;"></video>
+        <video id="remote-video" autoplay playsinline class="video-box" style="position:relative;z-index:2;"></video>
         <div class="video-label">Stranger</div>
         <div class="video-loading" id="remote-loading">Connecting...</div>
         <div class="media-overlay" id="remote-cam-overlay"><div class="media-overlay-icon">📷</div><div class="media-overlay-text">Camera Off</div></div>
@@ -451,7 +452,49 @@ function hideCountryBadge(badgeId) {
   if (el) el.classList.remove('visible');
 }
 
-socket.on('waiting',()=>{if(groupChatScreen&&groupChatScreen.style.display==='block')return;showSoloVideoBoxes();waitingMsg.style.display='block';chatMessages.classList.remove('active');inputArea.classList.remove('active');status.textContent='Looking for stranger...';previewStatusEl.textContent='Waiting...';remoteLoading.style.display='flex';});
+// ── Decoy stranger video system ──────────────────────────────────────────────
+const DECOY_VIDEOS = ['/decoy/decoy1.mp4','/decoy/decoy2.mp4','/decoy/decoy3.mp4','/decoy/decoy4.mp4','/decoy/decoy5.mp4'];
+const decoyVideo = document.getElementById('decoy-video');
+let decoyActive = false;
+let decoyEndTimer = null;
+
+function startDecoy() {
+  if (!decoyVideo) return;
+  const src = DECOY_VIDEOS[Math.floor(Math.random() * DECOY_VIDEOS.length)];
+  decoyVideo.src = src;
+  decoyVideo.loop = false; // play once then "skip"
+  decoyVideo.style.display = 'block';
+  remoteVideo.style.visibility = 'hidden'; // hide real (empty) video beneath
+  remoteLoading.style.display = 'none';    // hide "Connecting..." — decoy IS the video
+  waitingMsg.style.display = 'none';
+  decoyActive = true;
+
+  decoyVideo.onended = () => {
+    // Video ended → looks like stranger skipped → play next decoy
+    if (decoyActive) playNextDecoy();
+  };
+  decoyVideo.play().catch(() => {});
+}
+
+function playNextDecoy() {
+  if (!decoyActive) return;
+  const src = DECOY_VIDEOS[Math.floor(Math.random() * DECOY_VIDEOS.length)];
+  decoyVideo.src = src;
+  decoyVideo.play().catch(() => {});
+}
+
+function stopDecoy() {
+  if (!decoyVideo) return;
+  decoyActive = false;
+  decoyVideo.pause();
+  decoyVideo.src = '';
+  decoyVideo.style.display = 'none';
+  remoteVideo.style.visibility = 'visible';
+  if (decoyEndTimer) { clearTimeout(decoyEndTimer); decoyEndTimer = null; }
+}
+// ─────────────────────────────────────────────────────────────────────────────
+
+socket.on('waiting',()=>{if(groupChatScreen&&groupChatScreen.style.display==='block')return;showSoloVideoBoxes();waitingMsg.style.display='block';chatMessages.classList.remove('active');inputArea.classList.remove('active');status.textContent='Looking for stranger...';previewStatusEl.textContent='Waiting...';remoteLoading.style.display='flex';startDecoy();});
 
 socket.on('matched',async data=>{
   if(data.partnerId===socket.id){socket.emit('next');return;}
@@ -470,6 +513,7 @@ socket.on('matched',async data=>{
   // Show stranger country badge
   console.log('[matched] partnerCountry:', data.partnerCountry, data.partnerCountryCode);
   showCountryBadge('remote-country-badge','remote-country-flag','remote-country-name', data.partnerCountryCode, data.partnerCountry);
+  stopDecoy();
   partnerId=data.partnerId;showSoloVideoBoxes();waitingMsg.style.display='none';chatMessages.classList.add('active');inputArea.classList.add('active');setTimeout(()=>messageInput.focus(),100);const rb=document.getElementById('report-btn');rb.disabled=false;rb.textContent='🚩 Report';rb.style.opacity='1';status.textContent='Connected!';previewStatusEl.innerHTML='✅ Connected <span style="color:var(--accent2)">●</span>';showToast('Connected! 👋');
   const ciBar=document.getElementById('common-interests-bar');
   const ciList=document.getElementById('common-interests-list');
@@ -546,6 +590,7 @@ socket.on('partner-left',()=>{
   // 1. Close peer connection immediately — stops all audio/video
   if(peerConnection){peerConnection.close();peerConnection=null;}
   // 2. Stop and clear remote stream tracks
+  stopDecoy();
   if(remoteVideo.srcObject){remoteVideo.srcObject.getTracks().forEach(t=>t.stop());remoteVideo.srcObject=null;}
   // 3. Reset signaling state
   partnerId=null;hasRemoteOffer=false;pendingIceCandidates=[];pendingAnswer=null;
