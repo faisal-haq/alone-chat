@@ -148,15 +148,16 @@ function findAndMatchGroup(roomCode, directStranger = null) {
   const f1 = room.members[1];
 
   // Notify all members that searching has begun (so joiner can switch to group screen)
-  room.members.forEach(m => m.emit('group-searching'));
+  const decoyIndex = Math.floor(Math.random() * 5); // shared decoy for all room members
+  room.members.forEach(m => m.emit('group-searching', { decoyIndex }));
   f0.groupSession = `room-${roomCode}`;
   f0.groupRole = 'friend';
   f0.groupPartners = [f1];
   f1.groupSession = `room-${roomCode}`;
   f1.groupRole = 'friend';
   f1.groupPartners = [f0];
-  f0.emit('friend-preview-ready', { peer: { id: f1.id, slot: 0, isOfferer: f0.id < f1.id } });
-  f1.emit('friend-preview-ready', { peer: { id: f0.id, slot: 0, isOfferer: f1.id < f0.id } });
+  f0.emit('friend-preview-ready', { peer: { id: f1.id, slot: 0, isOfferer: f0.id < f1.id }, decoyIndex });
+  f1.emit('friend-preview-ready', { peer: { id: f0.id, slot: 0, isOfferer: f1.id < f0.id }, decoyIndex });
 
   // Find a solo stranger waiting, or use the solo user that just joined while this room was queued.
   const candidates = getAvailableSoloStrangers(mode, directStranger);

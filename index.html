@@ -458,48 +458,12 @@ function hideCountryBadge(badgeId) {
 // ── Decoy stranger videos ───────────────────────────────────────────────────
 const DECOY_VIDEOS=['/decoy/decoy1.mp4','/decoy/decoy2.mp4','/decoy/decoy3.mp4','/decoy/decoy4.mp4','/decoy/decoy5.mp4'];
 const decoyVideo=document.getElementById('decoy-video');
-let decoyActive=false;
-// ── Bug 3 fix: load() before play() so 'ended' fires reliably every time ────
-function _playDecoyVideo(videoEl, onEnd) {
-  const src = DECOY_VIDEOS[Math.floor(Math.random()*DECOY_VIDEOS.length)];
-  videoEl.src = src;
-  videoEl.load();
-  videoEl.onended = onEnd;
-  videoEl.play().catch(()=>{});
-}
-
-// Solo decoy (stranger slot in solo chat)
-function startDecoy(){if(!decoyVideo)return;decoyActive=true;decoyVideo.style.display='block';remoteLoading.style.display='none';waitingMsg.style.display='none';_playDecoyVideo(decoyVideo,()=>{if(decoyActive)_playDecoyVideo(decoyVideo,arguments.callee);});}
-function playNextDecoy(){if(!decoyActive||!decoyVideo)return;_playDecoyVideo(decoyVideo,()=>{if(decoyActive)_playDecoyVideo(decoyVideo,arguments.callee);});}
+let decoyActive=false,groupDecoyActive=false;
+function _lp(el,src,cb){el.src=src;el.load();el.onended=cb;el.play().catch(()=>{});}
+function startDecoy(){if(!decoyVideo)return;decoyActive=true;decoyVideo.style.display='block';remoteLoading.style.display='none';waitingMsg.style.display='none';let i=Math.floor(Math.random()*DECOY_VIDEOS.length);function p(){if(!decoyActive)return;_lp(decoyVideo,DECOY_VIDEOS[i],()=>{i=(i+1)%DECOY_VIDEOS.length;p();});}p();}
 function stopDecoy(){if(!decoyVideo)return;decoyActive=false;decoyVideo.pause();decoyVideo.removeAttribute('src');decoyVideo.load();decoyVideo.style.display='none';}
-
-// ── Bug 2 fix: group decoy in groupStrangerVideo slot ────────────────────────
-let groupDecoyActive = false;
-function startGroupDecoy() {
-  if (!groupStrangerVideo) return;
-  groupDecoyActive = true;
-  groupStrangerLoading.style.display = 'none';
-  groupStrangerVideo.style.display = 'block';
-  function playOne() {
-    if (!groupDecoyActive) return;
-    const src = DECOY_VIDEOS[Math.floor(Math.random()*DECOY_VIDEOS.length)];
-    groupStrangerVideo.src = src;
-    groupStrangerVideo.muted = true;
-    groupStrangerVideo.autoplay = true;
-    groupStrangerVideo.load();
-    groupStrangerVideo.onended = () => { if (groupDecoyActive) playOne(); };
-    groupStrangerVideo.play().catch(()=>{});
-  }
-  playOne();
-}
-function stopGroupDecoy() {
-  groupDecoyActive = false;
-  if (!groupStrangerVideo) return;
-  groupStrangerVideo.pause();
-  groupStrangerVideo.removeAttribute('src');
-  groupStrangerVideo.load();
-  groupStrangerVideo.srcObject = null;
-}
+function startGroupDecoy(startIndex){if(!groupStrangerVideo)return;groupDecoyActive=true;groupStrangerLoading.style.display='none';let i=(startIndex!==undefined)?(startIndex%DECOY_VIDEOS.length):Math.floor(Math.random()*DECOY_VIDEOS.length);function p(){if(!groupDecoyActive)return;groupStrangerVideo.muted=true;_lp(groupStrangerVideo,DECOY_VIDEOS[i],()=>{i=(i+1)%DECOY_VIDEOS.length;p();});}p();}
+function stopGroupDecoy(){groupDecoyActive=false;if(!groupStrangerVideo)return;groupStrangerVideo.pause();groupStrangerVideo.removeAttribute('src');groupStrangerVideo.load();groupStrangerVideo.srcObject=null;}
 // ────────────────────────────────────────────────────────────────────────────
 
 socket.on('waiting',()=>{if(groupChatScreen&&groupChatScreen.style.display==='block')return;showSoloVideoBoxes();waitingMsg.style.display='block';chatMessages.classList.remove('active');inputArea.classList.remove('active');status.textContent='Looking for stranger...';previewStatusEl.textContent='Waiting...';remoteLoading.style.display='flex';startDecoy();});
@@ -957,26 +921,17 @@ socket.on('friend-preview-ready', async (data) => {
   _showGroupScreen();
   showGroupVideoBoxes();
   groupWaitingMsg.style.display = 'block';
-  groupStrangerLoading.style.display = 'flex';
-  groupStrangerLoading.textContent = 'Finding stranger...';
+  groupStrangerLoading.style.display = 'none';
   status.textContent = 'Finding stranger for your group...';
   groupPreviewStatus.textContent = 'Connecting friend...';
-
+  startGroupDecoy(data.decoyIndex);
   const stream = await _getStreamForGroupConnection();
   const peer = data.peer;
-
-  // If friend stream is already live (slot 0), do NOT touch it — just keep slot map in sync.
-  // Calling startGroupPeer or closeGroupPeersBySlot(0) causes unnecessary renegotiation → blink.
-  if (groupSlotHasLiveStream(0)) {
-    groupSlotMap[peer.id] = peer.slot;
-    groupIsOfferer[peer.id] = peer.isOfferer;
-    return;
+  if (!groupSlotHasLiveStream(0)) {
+    groupFriendLoading.style.display = 'flex';
+    groupFriendLoading.textContent = 'Connecting friend...';
+    closeGroupPeersBySlot(0);
   }
-
-  // Friend stream gone — close stale PC so a fresh offer can be made
-  closeGroupPeersBySlot(0);
-  groupFriendLoading.style.display = 'flex';
-  groupFriendLoading.textContent = 'Connecting friend...';
   await startGroupPeer(peer, stream);
 });
 
@@ -1059,13 +1014,11 @@ socket.on('group-matched', async (data) => {
     if (labels[1]) labels[1].textContent = 'Friend';
     if (labels[2]) labels[2].textContent = 'Stranger';
   }
-  // Only show loading spinner for slots that don't already have a live stream.
-  // NEVER flash groupFriendLoading if friend video is still playing — that causes the blink.
   if (!groupSlotHasLiveStream(0)) {
     groupFriendLoading.style.display = 'flex';
     groupFriendLoading.textContent = 'Connecting...';
   }
-  stopGroupDecoy(); // stop decoy before real stranger connects
+  stopGroupDecoy();
   groupStrangerLoading.style.display = groupSlotHasLiveStream(1) ? 'none' : 'flex';
   groupStrangerLoading.textContent = 'Connecting...';
 
@@ -1091,24 +1044,6 @@ socket.on('group-matched', async (data) => {
   // Skip slot 0 (friend) entirely if the stream is already live — no need to
   // renegotiate and doing so would cause the friend video to blink.
   for (const peer of data.peers) {
-    if (peer.slot === 0 && groupSlotHasLiveStream(0)) {
-      // FIX: Friend connection still alive — update slot map with NEW peer.id
-      // (server may reassign peer objects on requeue; old id stale → PC not found)
-      // Find existing slot-0 PC and remap it to the new peer id
-      const oldPid = Object.keys(groupPCs).find(pid => groupPCs[pid] && groupPCs[pid].slot === 0);
-      if (oldPid && oldPid !== peer.id) {
-        groupPCs[peer.id] = groupPCs[oldPid];
-        groupSlotMap[peer.id] = 0;
-        groupIsOfferer[peer.id] = peer.isOfferer;
-        delete groupPCs[oldPid];
-        delete groupSlotMap[oldPid];
-        delete groupIsOfferer[oldPid];
-      } else {
-        groupSlotMap[peer.id] = peer.slot;
-        groupIsOfferer[peer.id] = peer.isOfferer;
-      }
-      continue;
-    }
     await startGroupPeer(peer, stream);
   }
 });
@@ -1209,24 +1144,14 @@ socket.on('group-message', (data) => {
 
 socket.on('group-partner-left', (data) => {
   showToast('Someone left the group', '👋');
-  // Only close the specific peer that left. If the stranger left, only close slot 1.
-  // Do NOT close the friend PC (slot 0) — it's still connected and working.
   closeGroupPeer(data.senderId);
   groupPreviewStatus.textContent = 'Finding new stranger...';
   if (groupChatScreen.style.display === 'block') {
     groupWaitingMsg.style.display = 'block';
     groupStrangerVideo.srcObject = null;
     groupStrangerLoading.style.display = 'none';
-    hideCountryBadge('group-friend-country-badge'); hideCountryBadge('group-stranger-country-badge');
+    hideCountryBadge('group-stranger-country-badge');
     document.getElementById('group-common-interests-bar').style.display = 'none';
-    // Clear only stranger slot state — friend slot stays intact (no blink)
-    const strangerPeerId = data.senderId;
-    delete groupPCs[strangerPeerId];
-    delete groupSlotMap[strangerPeerId];
-    delete groupIsOfferer[strangerPeerId];
-    delete groupPendingIce[strangerPeerId];
-    delete groupRemoteStreams[strangerPeerId];
-    // FIX Bug 2: play decoy in stranger slot while searching for real stranger
     startGroupDecoy();
   }
 });
@@ -1323,13 +1248,12 @@ function nextGroupChat() {
     groupChatMessages.innerHTML = '';
     document.getElementById('group-common-interests-bar').style.display = 'none';
 
-    // Show waiting UI for stranger slot only; friend slot stays live (no blink)
     groupStrangerLoading.style.display = 'none';
     groupWaitingMsg.style.display = 'block';
     showGroupVideoBoxes();
     groupPreviewStatus.textContent = 'Waiting...';
     status.textContent = 'Finding new stranger...';
-    startGroupDecoy(); // play decoy in stranger slot while searching
+    startGroupDecoy();
   }
 
   socket.emit('group-next');
