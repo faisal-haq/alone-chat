@@ -156,6 +156,27 @@
         @keyframes fadeInUp{from{opacity:0;transform:translateY(20px);}to{opacity:1;transform:translateY(0);}}
         @keyframes fadeIn{from{opacity:0;}to{opacity:1;}}
         @media (max-width:768px){nav{padding:0 20px;}.preview-body{grid-template-columns:1fr;height:auto;}.preview-video{height:48vw;min-height:180px;max-height:280px;}.preview-video:first-child{border-bottom:1px solid var(--border);}.hero-actions{flex-direction:column;width:100%;}.btn-primary,.btn-secondary{width:100%;justify-content:center;}.chat-messages{grid-template-columns:1fr;}#group-video-wrapper{grid-template-columns:1fr!important;height:auto!important;}#group-video-wrapper .preview-video{height:48vw;min-height:160px;max-height:260px;}}
+        .page{display:none;min-height:100vh;padding:120px 24px 80px;max-width:860px;margin:0 auto;}
+        .page.active{display:block;animation:fadeInUp .4s ease;}
+        .page h1{font-size:2.4rem;font-weight:900;margin-bottom:12px;background:linear-gradient(135deg,var(--primary-light),var(--accent2));-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;}
+        .page h2{font-size:1.4rem;font-weight:800;margin:36px 0 12px;color:var(--text);}
+        .page p,.page li{color:var(--text-muted);line-height:1.75;font-size:1rem;}
+        .page ul{padding-left:20px;margin:8px 0 16px;}.page li{margin-bottom:6px;}
+        .faq-item{background:var(--surface);border:1px solid var(--border);border-radius:16px;margin-bottom:12px;overflow:hidden;}
+        .faq-q{width:100%;text-align:left;padding:20px 24px;background:none;border:none;color:var(--text);font-size:1rem;font-weight:700;cursor:pointer;display:flex;justify-content:space-between;align-items:center;gap:12px;}
+        .faq-q:hover{color:var(--primary-light);}.faq-q .arrow{transition:transform .25s;font-size:.8rem;color:var(--text-muted);}
+        .faq-q.open .arrow{transform:rotate(180deg);}
+        .faq-a{display:none;padding:0 24px 20px;color:var(--text-muted);line-height:1.7;font-size:.95rem;}.faq-a.open{display:block;}
+        .safety-card{background:var(--surface);border:1px solid var(--border);border-radius:16px;padding:24px;margin-bottom:16px;display:flex;gap:16px;align-items:flex-start;}
+        .safety-icon{font-size:2rem;flex-shrink:0;}.safety-card h3{font-size:1rem;font-weight:700;color:var(--text);margin-bottom:6px;}
+        .safety-card p{color:var(--text-muted);font-size:.9rem;line-height:1.6;margin:0;}
+        .site-footer{background:var(--bg3);border-top:1px solid var(--border);padding:32px 24px;text-align:center;margin-top:60px;}
+        .footer-links{display:flex;justify-content:center;gap:8px;flex-wrap:wrap;margin-bottom:16px;}
+        .footer-link{font-size:.9rem;font-weight:600;color:var(--text-muted);padding:8px 16px;border-radius:10px;cursor:pointer;transition:all .2s;text-decoration:none;}
+        .footer-link:hover{color:var(--primary-light);background:var(--surface2);}
+        .footer-copy{font-size:.8rem;color:var(--text-muted);opacity:.6;}
+        .back-home{display:inline-flex;align-items:center;gap:6px;color:var(--primary-light);font-weight:600;font-size:.9rem;cursor:pointer;margin-bottom:24px;}
+        .back-home:hover{color:var(--accent2);}
     </style>
 
 <script type="application/ld+json">
@@ -163,30 +184,11 @@
   "@context":"https://schema.org",
   "@type":"FAQPage",
   "mainEntity":[
-    {
-      "@type":"Question",
-      "name":"What is OmeFly?",
-      "acceptedAnswer":{
-        "@type":"Answer",
-        "text":"OmeFly is a free random video and text chat platform where users can talk to strangers instantly online."
-      }
-    },
-    {
-      "@type":"Question",
-      "name":"Is OmeFly free to use?",
-      "acceptedAnswer":{
-        "@type":"Answer",
-        "text":"Yes, OmeFly is completely free for random video chat and text chat."
-      }
-    },
-    {
-      "@type":"Question",
-      "name":"Do I need to create an account?",
-      "acceptedAnswer":{
-        "@type":"Answer",
-        "text":"No, OmeFly does not require sign-up to start chatting with strangers."
-      }
-    }
+    {"@type":"Question","name":"Is Omefly free?","acceptedAnswer":{"@type":"Answer","text":"Yes, OmeFly is 100% free with no subscriptions or hidden fees."}},
+    {"@type":"Question","name":"Is signup needed?","acceptedAnswer":{"@type":"Answer","text":"No sign-up required. Open the site and start chatting instantly."}},
+    {"@type":"Question","name":"Can I use mobile?","acceptedAnswer":{"@type":"Answer","text":"Yes, OmeFly works on all modern smartphones and tablets via your browser."}},
+    {"@type":"Question","name":"Is chat anonymous?","acceptedAnswer":{"@type":"Answer","text":"Yes, all chats are anonymous. No personal information is required or stored."}},
+    {"@type":"Question","name":"What is OmeFly?","acceptedAnswer":{"@type":"Answer","text":"OmeFly is a free random video and text chat platform — the best Omegle alternative."}}
   ]
 }
 </script>
@@ -1455,5 +1457,117 @@ socket.on('banned', () => {
   const bannedScreen = document.getElementById('banned-screen');
   bannedScreen.style.display = 'flex';
 });
+</script>
+
+<!-- ── FOOTER ── -->
+<footer class="site-footer" id="site-footer">
+  <div class="footer-links">
+    <span class="footer-link" onclick="showPage('alt')">Omegle Alternative</span>
+    <span class="footer-link" onclick="showPage('alt')">Random Video Chat</span>
+    <span class="footer-link" onclick="showPage('alt')">Talk to Strangers</span>
+    <span class="footer-link" onclick="showPage('safety')">Safety</span>
+    <span class="footer-link" onclick="showPage('faq')">FAQ</span>
+  </div>
+  <div class="footer-copy">© 2025 OmeFly — Free Random Video Chat. All rights reserved.</div>
+</footer>
+
+<!-- ── CONTENT PAGES ── -->
+<div id="page-alt" class="page">
+  <span class="back-home" onclick="showPage(null)">← Back</span>
+  <h1>Best Omegle Alternative — Free Random Video Chat</h1>
+  <p>OmeFly is the #1 free Omegle alternative for random video chat and text chat with strangers. No sign-up, no fees — instant connections worldwide.</p>
+  <h2>Why OmeFly is the Best Omegle Alternative</h2>
+  <ul>
+    <li>100% free — no subscriptions or credits</li>
+    <li>No account or email required</li>
+    <li>Works on mobile, tablet, and desktop</li>
+    <li>Interest-based matching</li>
+    <li>Group chat mode — bring a friend, meet a stranger together</li>
+    <li>Country flags show where your stranger is from</li>
+    <li>Faster matching than most Omegle alternatives</li>
+  </ul>
+  <h2>Talk to Strangers Online — Safe &amp; Anonymous</h2>
+  <p>All chats are anonymous. We don't store conversations or require personal info. Report any bad behaviour with the 🚩 button to keep the community safe.</p>
+  <h2>Sites Like Omegle — Why Switch to OmeFly?</h2>
+  <p>Since Omegle shut down, millions search for the best sites like Omegle. OmeFly offers everything Omegle had — plus group mode, interest matching, and mobile support.</p>
+</div>
+
+<div id="page-safety" class="page">
+  <span class="back-home" onclick="showPage(null)">← Back</span>
+  <h1>Safety on OmeFly</h1>
+  <p>Your safety is our priority. OmeFly is designed to keep random video chat fun and secure for everyone.</p>
+  <div class="safety-card"><div class="safety-icon">🎭</div><div><h3>100% Anonymous</h3><p>No account, no email, no personal info required. Your identity is never revealed to strangers.</p></div></div>
+  <div class="safety-card"><div class="safety-icon">🚩</div><div><h3>Report System</h3><p>See something inappropriate? Hit Report during any chat. Reported users are reviewed and banned.</p></div></div>
+  <div class="safety-card"><div class="safety-icon">⚡</div><div><h3>Instant Skip</h3><p>Feel uncomfortable? Press Next at any time to instantly disconnect and find someone new.</p></div></div>
+  <div class="safety-card"><div class="safety-icon">🔒</div><div><h3>No Data Storage</h3><p>We do not record or store your video or text conversations. All sessions are peer-to-peer.</p></div></div>
+  <div class="safety-card"><div class="safety-icon">🛡️</div><div><h3>Community Guidelines</h3><p>OmeFly prohibits nudity, harassment, hate speech, and illegal content. Violations = immediate ban.</p></div></div>
+  <h2>Safety Tips</h2>
+  <ul>
+    <li>Never share your name, address, phone, or school</li>
+    <li>Do not meet strangers from OmeFly in person</li>
+    <li>If someone makes you uncomfortable, click Next immediately</li>
+    <li>Report any inappropriate behaviour with the 🚩 button</li>
+    <li>OmeFly is intended for users 18 and older</li>
+  </ul>
+</div>
+
+<div id="page-faq" class="page">
+  <span class="back-home" onclick="showPage(null)">← Back</span>
+  <h1>Frequently Asked Questions</h1>
+  <p>Everything you need to know about OmeFly.</p>
+  <div style="margin-top:28px;">
+    <div class="faq-item"><button class="faq-q" onclick="toggleFaq(this)">Is Omefly free? <span class="arrow">▼</span></button><div class="faq-a">Yes — OmeFly is completely free. No subscriptions, no credits, no hidden costs.</div></div>
+    <div class="faq-item"><button class="faq-q" onclick="toggleFaq(this)">Is signup needed? <span class="arrow">▼</span></button><div class="faq-a">No sign-up required. You don't need an account, email, or any personal information to start chatting.</div></div>
+    <div class="faq-item"><button class="faq-q" onclick="toggleFaq(this)">Can I use mobile? <span class="arrow">▼</span></button><div class="faq-a">Yes. OmeFly works on all modern smartphones and tablets through your browser. No app download needed.</div></div>
+    <div class="faq-item"><button class="faq-q" onclick="toggleFaq(this)">Is chat anonymous? <span class="arrow">▼</span></button><div class="faq-a">Yes, all chats are fully anonymous. We don't require your name, email, or any personal details.</div></div>
+    <div class="faq-item"><button class="faq-q" onclick="toggleFaq(this)">What is OmeFly? <span class="arrow">▼</span></button><div class="faq-a">OmeFly is a free random video and text chat platform — the best Omegle alternative. It pairs you instantly with a random stranger from anywhere in the world.</div></div>
+    <div class="faq-item"><button class="faq-q" onclick="toggleFaq(this)">How do I match by interests? <span class="arrow">▼</span></button><div class="faq-a">Type your interests (e.g. gaming, music, travel) in the interests box before starting. OmeFly will try to match you with someone who shares those interests.</div></div>
+    <div class="faq-item"><button class="faq-q" onclick="toggleFaq(this)">What is Group Chat mode? <span class="arrow">▼</span></button><div class="faq-a">Group Chat lets you and a friend create a private room, then OmeFly adds a random stranger — perfect for meeting new people together.</div></div>
+    <div class="faq-item"><button class="faq-q" onclick="toggleFaq(this)">Is OmeFly safe? <span class="arrow">▼</span></button><div class="faq-a">We have a report system, instant skip, and community guidelines. All chats are anonymous and conversations are not stored.</div></div>
+    <div class="faq-item"><button class="faq-q" onclick="toggleFaq(this)">What happened to Omegle? <span class="arrow">▼</span></button><div class="faq-a">Omegle shut down in November 2023. OmeFly is the best replacement — same random stranger chat with better features and safety.</div></div>
+    <div class="faq-item"><button class="faq-q" onclick="toggleFaq(this)">Why can't I see the stranger's video? <span class="arrow">▼</span></button><div class="faq-a">Usually a browser permissions issue. Allow camera and microphone access, then refresh the page. If it persists, try Chrome.</div></div>
+  </div>
+</div>
+
+<script>
+const PAGES={alt:'page-alt',safety:'page-safety',faq:'page-faq'};
+function showPage(key){
+  Object.values(PAGES).forEach(id=>{const el=document.getElementById(id);el.classList.remove('active');el.style.display='none';});
+  const footer=document.getElementById('site-footer');
+  const intro=document.getElementById('intro-screen');
+  if(!key){
+    if(intro)intro.style.display='flex';
+    if(footer)footer.style.display='block';
+    window.scrollTo(0,0);history.pushState(null,'','/');
+  } else {
+    if(intro)intro.style.display='none';
+    if(footer)footer.style.display='none';
+    const el=document.getElementById(PAGES[key]);
+    if(el){el.style.display='block';el.classList.add('active');}
+    window.scrollTo(0,0);
+    const paths={alt:'/omegle-alternative',safety:'/safety',faq:'/faq'};
+    history.pushState(null,'',paths[key]||'/');
+  }
+}
+window.addEventListener('popstate',()=>{
+  const p=location.pathname;
+  if(p==='/safety')showPage('safety');
+  else if(p==='/faq')showPage('faq');
+  else if(p.includes('omegle')||p.includes('random-video')||p.includes('talk-to'))showPage('alt');
+  else showPage(null);
+});
+(function(){
+  const p=location.pathname;
+  if(p==='/safety')showPage('safety');
+  else if(p==='/faq')showPage('faq');
+  else if(p.includes('omegle')||p.includes('random-video')||p.includes('talk-to'))showPage('alt');
+})();
+function toggleFaq(btn){
+  const a=btn.nextElementSibling;
+  const isOpen=btn.classList.contains('open');
+  document.querySelectorAll('.faq-q').forEach(b=>{b.classList.remove('open');b.nextElementSibling.classList.remove('open');});
+  if(!isOpen){btn.classList.add('open');a.classList.add('open');}
+}
+</script>
 </script>
 </html>
