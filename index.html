@@ -10,11 +10,11 @@
     <meta name="keywords" content="omegle, omegle alternative, random video chat, talk to strangers, free video chat, omegle like site, chatroulette, stranger chat, omefly, random chat">
     <meta name="robots" content="index, follow">
     <meta name="author" content="OmeFly">
-    <link rel="canonical" href="https://omefly.com/">
+    <link rel="canonical" href="https://omefly.online/">
 
     <!-- Open Graph (Facebook / WhatsApp previews) -->
     <meta property="og:type" content="website">
-    <meta property="og:url" content="https://omefly.com/">
+    <meta property="og:url" content="https://omefly.online/">
     <meta property="og:title" content="OmeFly - Free Random Video Chat | Best Omegle Alternative">
     <meta property="og:description" content="Meet strangers instantly via video or text chat. OmeFly is the modern, safe Omegle alternative — free, fast, and fun. Start chatting now!">
     <meta property="og:site_name" content="OmeFly">
@@ -30,20 +30,20 @@
       "@context": "https://schema.org",
       "@type": "WebSite",
       "name": "OmeFly",
-      "url": "https://omefly.com/",
+      "url": "https://omefly.online/",
       "description": "OmeFly is a free random video and text chat platform — the best Omegle alternative to meet and talk to strangers online.",
       "potentialAction": {
         "@type": "SearchAction",
-        "target": "https://omefly.com/?q={search_term_string}",
+        "target": "https://omefly.online/?q={search_term_string}",
         "query-input": "required name=search_term_string"
       },
       "publisher": {
         "@type": "Organization",
         "name": "OmeFly",
-        "url": "https://omefly.com/",
+        "url": "https://omefly.online/",
         "logo": {
           "@type": "ImageObject",
-          "url": "https://omefly.com/logo.png"
+          "url": "https://omefly.online/logo.png"
         },
         "sameAs": []
       }
@@ -62,7 +62,7 @@
         "priceCurrency": "USD"
       },
       "description": "Free random video and text chat app. Talk to strangers instantly — the top Omegle alternative.",
-      "url": "https://omefly.com/"
+      "url": "https://omefly.online/"
     }
     </script>
     <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -157,6 +157,40 @@
         @keyframes fadeIn{from{opacity:0;}to{opacity:1;}}
         @media (max-width:768px){nav{padding:0 20px;}.preview-body{grid-template-columns:1fr;height:auto;}.preview-video{height:48vw;min-height:180px;max-height:280px;}.preview-video:first-child{border-bottom:1px solid var(--border);}.hero-actions{flex-direction:column;width:100%;}.btn-primary,.btn-secondary{width:100%;justify-content:center;}.chat-messages{grid-template-columns:1fr;}#group-video-wrapper{grid-template-columns:1fr!important;height:auto!important;}#group-video-wrapper .preview-video{height:48vw;min-height:160px;max-height:260px;}}
     </style>
+
+<script type="application/ld+json">
+{
+  "@context":"https://schema.org",
+  "@type":"FAQPage",
+  "mainEntity":[
+    {
+      "@type":"Question",
+      "name":"What is OmeFly?",
+      "acceptedAnswer":{
+        "@type":"Answer",
+        "text":"OmeFly is a free random video and text chat platform where users can talk to strangers instantly online."
+      }
+    },
+    {
+      "@type":"Question",
+      "name":"Is OmeFly free to use?",
+      "acceptedAnswer":{
+        "@type":"Answer",
+        "text":"Yes, OmeFly is completely free for random video chat and text chat."
+      }
+    },
+    {
+      "@type":"Question",
+      "name":"Do I need to create an account?",
+      "acceptedAnswer":{
+        "@type":"Answer",
+        "text":"No, OmeFly does not require sign-up to start chatting with strangers."
+      }
+    }
+  ]
+}
+</script>
+
 </head>
 <body>
 
@@ -252,7 +286,7 @@
     <div class="interests-bar" id="interests-bar">
       <span class="interests-label">Interests:</span>
       <div id="interest-chips"></div>
-      <input type="text" id="interest-input" class="interest-input" placeholder="music, gaming, movies...">
+      <input type="text" id="interest-input" class="interest-input" placeholder="music, gaming, movies..." aria-label="Add interests">
     </div>
   </div>
 
