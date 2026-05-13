@@ -24,10 +24,28 @@ app.get('/sitemap.xml', (req, res) => {
 });
 // ─────────────────────────────────────────────────────────────────────────────
 
+// ── Favicon.ico — SEO tools need /favicon.ico to return 200 ──────────────────
+app.get('/favicon.ico', (req, res) => {
+  res.type('image/svg+xml');
+  res.send("<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><defs><linearGradient id='g' x1='0%' y1='0%' x2='100%' y2='100%'><stop offset='0%' stop-color='%236c63ff'/><stop offset='100%' stop-color='%2343d9ad'/></linearGradient></defs><circle cx='50' cy='50' r='48' fill='url(%23g)'/><text x='50' y='62' font-size='52' text-anchor='middle' font-family='Arial' font-weight='900' fill='white'>OF</text></svg>");
+});
+// ─────────────────────────────────────────────────────────────────────────────
+
 const io = socketIo(server, {
   cors: { origin: "*", methods: ["GET", "POST"], credentials: false },
   transports: ['websocket', 'polling']
 });
+
+// ── Force HTTPS + fix http:// problem ────────────────────────────────────────
+// Render/Railway send x-forwarded-proto header to detect original protocol
+app.use((req, res, next) => {
+  if (req.headers['x-forwarded-proto'] === 'http') {
+    // 301 permanent redirect to https — fixes Google "Page with redirect" warning
+    return res.redirect(301, 'https://' + req.headers.host + req.url);
+  }
+  next();
+});
+// ─────────────────────────────────────────────────────────────────────────────
 
 app.use(express.static(path.join(__dirname)));
 
