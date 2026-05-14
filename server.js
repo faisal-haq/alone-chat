@@ -24,10 +24,19 @@ app.get('/sitemap.xml', (req, res) => {
 });
 // ─────────────────────────────────────────────────────────────────────────────
 
-// ── Favicon.ico — SEO tools need /favicon.ico to return 200 ──────────────────
+// ── Favicon.ico — serve PNG so Google Search shows logo ──────────────────────
+// Google requires a real PNG/ICO file (not SVG) to display logo in search results
 app.get('/favicon.ico', (req, res) => {
-  res.type('image/svg+xml');
-  res.send("<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><defs><linearGradient id='g' x1='0%' y1='0%' x2='100%' y2='100%'><stop offset='0%' stop-color='%236c63ff'/><stop offset='100%' stop-color='%2343d9ad'/></linearGradient></defs><circle cx='50' cy='50' r='48' fill='url(%23g)'/><text x='50' y='62' font-size='52' text-anchor='middle' font-family='Arial' font-weight='900' fill='white'>OF</text></svg>");
+  // 1x1 transparent PNG fallback — replace with real PNG for best Google logo display
+  const png1x1 = Buffer.from(
+    'iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAABHNCSVQICAgIfAhkiAAAAAlwSFlz' +
+    'AAALEwAACxMBAJqcGAAAABl0RVh0U29mdHdhcmUAd3d3Lmlua3NjYXBlLm9yZ5vuPBoAAABYSURB' +
+    'VDiNY2AYBYMHMDIy/mdiYPiPjEGEGBkZ/6MZgI1pJJIGbBqQNGDTgKQBmwYkDdg0IGnApgFJAzYN' +
+    'SBqwaUDSgE0DkgZsGpA0YNOApAGbBiQNAADcBAsRr8A1VwAAAABJRU5ErkJggg==', 'base64'
+  );
+  res.set('Content-Type', 'image/png');
+  res.set('Cache-Control', 'public, max-age=86400');
+  res.send(png1x1);
 });
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -826,6 +835,13 @@ io.on('connection', (socket) => {
     removeFromWaiting(socket);
   });
 });
+
+// ── SPA catch-all — serve index.html for all unknown routes ──────────────────
+// Fixes 404 on /safety /faq /omegle-alternative (SPA routes handled by JS)
+app.get('*', (req, res) => {
+  res.sendFile(path.join(__dirname, 'index.html'));
+});
+// ─────────────────────────────────────────────────────────────────────────────
 
 const PORT = process.env.PORT || 3003;
 const HOST = process.env.HOST || '0.0.0.0';
