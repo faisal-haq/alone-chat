@@ -588,26 +588,26 @@ function requeueGroupRoom(socket) {
     return;
   }
 
-  // Fully reset group session state for all current room members (friends + possibly stranger)
-  // so stale `groupRole/groupPartners/groupSession` don't survive into the next match.
-  // FIX: pass keepRoomCode=true so friendRoomCode is NOT nulled on friends — without this,
-  // the second friend's next requeue call loses the room code and falls to solo findAndMatch.
-  room.members.forEach(member => {
-    // Notify peers that group partner is leaving (best-effort; clients will rebuild on group-matched)
-    try {
-      (member.groupPartners || []).forEach(p => {
-        if (p && p.id !== member.id) p.emit('group-partner-left', { senderId: member.id });
-      });
-    } catch (e) {}
+  // Snapshot partners before mutating state. The current stranger is not in
+  // room.members, so clearing groupPartners first loses the only reference.
+  const roomMembers = room.members.slice(0, 2);
+  const oldPartners = [...new Set(roomMembers.flatMap(member => member.groupPartners || []))];
+  const stranger = oldPartners.find(p => p.groupRole === 'stranger');
 
+  // Keep the two friends connected. Only tell the friends that the stranger
+  // left; otherwise the client closes the friend peer connection too.
+  if (stranger) {
+    roomMembers.forEach(member => {
+      member.emit('group-partner-left', { senderId: stranger.id });
+    });
+  }
+
+  roomMembers.forEach(member => {
     member.groupSession = null;
     member.groupRole = null;
     member.groupPartners = [];
   });
 
-  // If the current caller had a stranger attached, remove it from waiting tracking too.
-  const oldPartners = socket.groupPartners || [];
-  const stranger = oldPartners.find(p => p.groupRole === 'stranger');
   if (stranger) {
     try {
       stranger.emit('group-partner-left', { senderId: socket.id });

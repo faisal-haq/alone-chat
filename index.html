@@ -1098,6 +1098,14 @@ socket.on('friend-preview-ready', async (data) => {
   startGroupDecoy(data.decoyIndex);
   const stream = await _getStreamForGroupConnection();
   const peer = data.peer;
+  const keepExistingFriendPeer = groupSlotHasLiveStream(0) && groupPCs[peer.id];
+  if (keepExistingFriendPeer) {
+    groupSlotMap[peer.id] = peer.slot;
+    groupIsOfferer[peer.id] = peer.isOfferer;
+    groupFriendLoading.style.display = 'none';
+    groupPreviewStatus.textContent = 'Finding stranger...';
+    return;
+  }
   if (!groupSlotHasLiveStream(0)) {
     groupFriendLoading.style.display = 'flex';
     groupFriendLoading.textContent = 'Connecting friend...';
@@ -1215,6 +1223,11 @@ socket.on('group-matched', async (data) => {
   // Skip slot 0 (friend) entirely if the stream is already live — no need to
   // renegotiate and doing so would cause the friend video to blink.
   for (const peer of data.peers) {
+    if (data.role === 'friend' && peer.slot === 0 && groupSlotHasLiveStream(0) && groupPCs[peer.id]) {
+      groupSlotMap[peer.id] = peer.slot;
+      groupIsOfferer[peer.id] = peer.isOfferer;
+      continue;
+    }
     await startGroupPeer(peer, stream);
   }
 });
