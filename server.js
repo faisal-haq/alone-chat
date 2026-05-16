@@ -637,7 +637,7 @@ function requeueGroupRoom(socket) {
 }
 
 function broadcastUserCount() {
-  io.emit('user-count', { count: onlineCount + 5 }); // +5 decoy strangers always online
+  io.emit('user-count', { count: onlineCount });
 }
 
 function removeFromWaiting(socket) {
