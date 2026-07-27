@@ -16,10 +16,10 @@ app.get('/sitemap.xml', (req, res) => {
   res.type('application/xml');
   res.send(`<?xml version="1.0" encoding="UTF-8"?>
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
-  <url><loc>https://omefly.online/</loc><priority>1.0</priority></url>
-  <url><loc>https://omefly.online/omegle-alternative</loc><priority>0.9</priority></url>
-  <url><loc>https://omefly.online/safety</loc><priority>0.8</priority></url>
-  <url><loc>https://omefly.online/faq</loc><priority>0.8</priority></url>
+  <url><loc>https://omefly.online/</loc><lastmod>2026-03-01</lastmod><priority>1.0</priority></url>
+  <url><loc>https://omefly.online/omegle-alternative</loc><lastmod>2026-03-01</lastmod><priority>0.9</priority></url>
+  <url><loc>https://omefly.online/safety</loc><lastmod>2026-03-01</lastmod><priority>0.8</priority></url>
+  <url><loc>https://omefly.online/faq</loc><lastmod>2026-03-01</lastmod><priority>0.8</priority></url>
 </urlset>`);
 });
 // ─────────────────────────────────────────────────────────────────────────────
