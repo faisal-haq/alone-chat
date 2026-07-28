@@ -808,16 +808,18 @@ io.on('connection', (socket) => {
   const clientIP = getClientIP(socket);
   const deviceId = socket.handshake.auth && socket.handshake.auth.deviceId;
 
-  // One session per device — kick duplicate tabs/browsers
+  // One session per device — newest connection wins.
+  // (Previously this rejected the NEW socket if an old one hadn't timed out yet,
+  // which caused false "already open" errors on a simple refresh/reconnect,
+  // since Socket.IO can take ~20-25s to notice a dropped connection. Now we
+  // kick the stale old socket instead, so a real single tab never gets blocked.)
   if (deviceId) {
     const existingSocketId = deviceSessions.get(deviceId);
     if (existingSocketId && existingSocketId !== socket.id) {
       const existingSocket = io.sockets.sockets.get(existingSocketId);
       if (existingSocket) {
-        // Old session is still alive — reject the new one
-        socket.emit('duplicate-session');
-        socket.disconnect(true);
-        return;
+        existingSocket.emit('duplicate-session');
+        existingSocket.disconnect(true);
       }
     }
     deviceSessions.set(deviceId, socket.id);
